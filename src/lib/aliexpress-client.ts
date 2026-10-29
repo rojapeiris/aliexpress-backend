@@ -51,10 +51,9 @@ export function getAliexpressTimestamp(): string {
 /**
  * Generate HMAC-SHA256 signature for AliExpress IOP / TOP gateway.
  *
- * Algorithm:
- *  1. Sort all parameter keys alphabetically (ASCII order), excluding 'sign'.
- *  2. Concatenate: {apiPath}{key1}{value1}{key2}{value2}...
- *  3. HMAC-SHA256 with appSecret, formatted as uppercase Hex.
+ * Rules:
+ *  - For IOP system tools (/auth/token/*): baseString = action + sortedParams
+ *  - For TOP business APIs (/sync): baseString = sortedParams (NO path prefix)
  */
 export async function generateSign(
 	params: Record<string, string>,
@@ -65,7 +64,8 @@ export async function generateSign(
 		.filter((k) => k !== "sign" && params[k] !== undefined && params[k] !== null)
 		.sort();
 
-	let baseString = apiPath;
+	// If apiPath is "/sync" or empty, standard TOP protocol does not prepend the path
+	let baseString = apiPath === "/sync" || !apiPath ? "" : apiPath;
 	for (const key of sortedKeys) {
 		baseString += `${key}${params[key]}`;
 	}
@@ -107,6 +107,7 @@ export function resolveConfig(config?: AliExpressClientConfig): {
  * Call system-level authentication APIs via POST:
  *  - /auth/token/create
  *  - /auth/token/refresh
+ * URL on IOP gateway: https://api-sg.aliexpress.com/rest/auth/token/create
  */
 export async function callAuthApi<T = unknown>(
 	config: AliExpressClientConfig | undefined,
@@ -114,7 +115,7 @@ export async function callAuthApi<T = unknown>(
 	params: Record<string, string>
 ): Promise<AliExpressResponse<T>> {
 	const { appKey, appSecret } = resolveConfig(config);
-	const timestamp = getAliexpressTimestamp();
+	const timestamp = Date.now().toString();
 
 	const allParams: Record<string, string> = {
 		app_key: appKey,
@@ -123,14 +124,14 @@ export async function callAuthApi<T = unknown>(
 		...params,
 	};
 
+	// System APIs prepend the action path (e.g. /auth/token/create)
 	const sign = await generateSign(allParams, action, appSecret);
 	allParams["sign"] = sign;
 
 	const body = new URLSearchParams(allParams);
-	const url = `${ALIEXPRESS_GATEWAY}${action}`;
+	const url = `${ALIEXPRESS_GATEWAY}/rest${action}`;
 
 	try {
-		// AliExpress token endpoints require POST with x-www-form-urlencoded
 		const response = await fetch(url, {
 			method: "POST",
 			headers: {
@@ -173,7 +174,6 @@ export async function callAuthApi<T = unknown>(
 			};
 		}
 
-		// Also check for sub-level error flags if returned
 		if (json["code"] && json["code"] !== 0 && json["code"] !== "0" && json["code"] !== 200) {
 			return {
 				success: false,
@@ -193,11 +193,11 @@ export async function callAuthApi<T = unknown>(
 
 /**
  * Execute AliExpress Open Platform business API calls:
- *  - aliexpress.category.redefining.getchildrenpostcategorybyid
  *  - aliexpress.ds.recommend.feed.get
  *  - aliexpress.ds.product.get
  *  - aliexpress.ds.text.search
- * Uses POST /sync endpoint.
+ *  - aliexpress.ds.category.get
+ * Uses POST /sync endpoint. Note: TOP protocol does not prepend /sync to signature base string.
  */
 export async function callAliExpressApi<T = unknown>(
 	config: AliExpressClientConfig | undefined,
@@ -207,7 +207,6 @@ export async function callAliExpressApi<T = unknown>(
 ): Promise<AliExpressResponse<T>> {
 	const { appKey, appSecret } = resolveConfig(config);
 	const timestamp = getAliexpressTimestamp();
-	const apiPath = "/sync";
 
 	const allParams: Record<string, string> = {
 		app_key: appKey,
@@ -225,13 +224,14 @@ export async function callAliExpressApi<T = unknown>(
 		}
 	}
 
-	const sign = await generateSign(allParams, apiPath, appSecret);
+	// Empty string for apiPath: standard TOP /sync does NOT prefix with /sync
+	const sign = await generateSign(allParams, "", appSecret);
 	allParams["sign"] = sign;
 
 	const body = new URLSearchParams(allParams);
 
 	try {
-		const response = await fetch(`${ALIEXPRESS_GATEWAY}${apiPath}`, {
+		const response = await fetch(`${ALIEXPRESS_GATEWAY}/sync`, {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/x-www-form-urlencoded;charset=utf-8",
@@ -274,7 +274,6 @@ export async function callAliExpressApi<T = unknown>(
 			};
 		}
 
-		// Response key pattern: method name with dots replaced by underscores + "_response"
 		const responseKey = method.replace(/\./g, "_") + "_response";
 		const data = (json[responseKey] ?? json) as T;
 

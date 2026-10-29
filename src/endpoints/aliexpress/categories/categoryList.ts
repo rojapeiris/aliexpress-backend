@@ -4,41 +4,20 @@ import { AppContext, DEFAULT_APP_KEY, DEFAULT_APP_SECRET } from "../../../types"
 import { callAliExpressApi, AliExpressClientConfig } from "../../../lib/aliexpress-client";
 import { TokenRepository } from "../../../lib/token-repository";
 
-interface RawCategoryDto {
-	id: number;
-	isleaf: boolean;
-	level: number;
-	names?: string | Record<string, string>;
+interface RawDsCategoryItem {
+	category_id: number;
+	category_name: string;
+	parent_category_id?: number;
 }
 
-interface RawCategoryResponse {
-	result?: {
-		aeop_post_category_list?: {
-			aeop_post_category_dto?: RawCategoryDto[];
+interface RawDsCategoryResponse {
+	resp_result?: {
+		result?: {
+			total_result_count?: number;
+			categories?: {
+				category?: RawDsCategoryItem[];
+			};
 		};
-		success?: boolean;
-		error_message?: string;
-	};
-}
-
-export function parseCategoryDto(dto: RawCategoryDto) {
-	let parsedNames: Record<string, string> = {};
-	if (typeof dto.names === "string") {
-		try {
-			parsedNames = JSON.parse(dto.names);
-		} catch {
-			parsedNames = { en: dto.names };
-		}
-	} else if (typeof dto.names === "object" && dto.names !== null) {
-		parsedNames = dto.names;
-	}
-
-	return {
-		id: dto.id,
-		name: parsedNames["en"] || Object.values(parsedNames)[0] || `Category ${dto.id}`,
-		names: parsedNames,
-		is_leaf: Boolean(dto.isleaf),
-		level: dto.level,
 	};
 }
 
@@ -46,7 +25,7 @@ export function parseCategoryDto(dto: RawCategoryDto) {
  * GET /aliexpress/categories
  * Retrieve root categories or child categories by parent_id.
  *
- * Method: aliexpress.category.redefining.getchildrenpostcategorybyid
+ * Method: aliexpress.ds.category.get
  * Docs: https://openservice.aliexpress.com/
  */
 export class AliExpressCategoryList extends OpenAPIRoute {
@@ -54,7 +33,7 @@ export class AliExpressCategoryList extends OpenAPIRoute {
 		tags: ["AliExpress - Categories"],
 		summary: "Get categories (root or by parent_id)",
 		description:
-			"Retrieves categories from AliExpress. Pass parent_id=0 (or omit it) to get top-level (root) categories. Pass a valid category ID to get its child subcategories.",
+			"Retrieves categories from AliExpress Dropshipping Center. Pass parent_id=0 (or omit it) to get top-level (root) categories. Pass a valid category ID to get its child subcategories.",
 		request: {
 			query: z.object({
 				parent_id: z
@@ -65,7 +44,7 @@ export class AliExpressCategoryList extends OpenAPIRoute {
 				user_id: z
 					.string()
 					.optional()
-					.describe("Optional seller user_id to use their session token (if required)"),
+					.describe("Optional seller user_id to use their session token"),
 			}),
 		},
 		responses: {
@@ -80,9 +59,7 @@ export class AliExpressCategoryList extends OpenAPIRoute {
 								z.object({
 									id: z.number(),
 									name: z.string(),
-									names: z.record(z.string()),
-									is_leaf: z.boolean(),
-									level: z.number(),
+									parent_id: z.number().optional(),
 								})
 							),
 							count: z.number(),
@@ -112,7 +89,6 @@ export class AliExpressCategoryList extends OpenAPIRoute {
 			appSecret: c.env.ALIEXPRESS_APP_SECRET || DEFAULT_APP_SECRET,
 		};
 
-		// Fetch optional session token if available
 		let sessionToken: string | undefined;
 		const repo = new TokenRepository(c.env.DB);
 		if (data.query.user_id) {
@@ -127,11 +103,11 @@ export class AliExpressCategoryList extends OpenAPIRoute {
 			}
 		}
 
-		// Call aliexpress.category.redefining.getchildrenpostcategorybyid with param0
-		const apiResponse = await callAliExpressApi<RawCategoryResponse>(
+		// Call aliexpress.ds.category.get
+		const apiResponse = await callAliExpressApi<RawDsCategoryResponse>(
 			config,
-			"aliexpress.category.redefining.getchildrenpostcategorybyid",
-			{ param0: parentId },
+			"aliexpress.ds.category.get",
+			{ app_signature: "true" },
 			sessionToken
 		);
 
@@ -146,19 +122,30 @@ export class AliExpressCategoryList extends OpenAPIRoute {
 			);
 		}
 
-		const categoryList =
-			apiResponse.data.result?.aeop_post_category_list?.aeop_post_category_dto || [];
+		const rawCategories =
+			apiResponse.data.resp_result?.result?.categories?.category || [];
 
-		const formatted = categoryList.map(parseCategoryDto);
+		// Filter according to parent_id
+		const filtered = rawCategories
+			.filter((cat) => {
+				if (parentId === 0) {
+					return !cat.parent_category_id;
+				}
+				return cat.parent_category_id === parentId;
+			})
+			.map((cat) => ({
+				id: cat.category_id,
+				name: cat.category_name,
+				parent_id: cat.parent_category_id,
+			}));
 
 		return c.json({
 			success: true,
 			result: {
 				parent_id: parentId,
-				categories: formatted,
-				count: formatted.length,
+				categories: filtered,
+				count: filtered.length,
 			},
 		});
 	}
 }
-

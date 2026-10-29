@@ -188,14 +188,13 @@ export class AliExpressProductSearch extends OpenAPIRoute {
 			keywords: query.q,
 			page_no: pageNo,
 			page_size: pageSize,
-			country_code: query.country || "US",
+			countryCode: query.country || "US",
 			currency: query.target_currency || "USD",
 			locale: (query.target_language || "EN").toLowerCase(),
 		};
 
 		if (query.category_id) {
 			searchParams.category_id = query.category_id;
-			searchParams.cate_id = query.category_id;
 		}
 		if (query.sort) {
 			searchParams.sort = query.sort;

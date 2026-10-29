@@ -3,35 +3,35 @@ import { z } from "zod";
 import { AppContext, DEFAULT_APP_KEY, DEFAULT_APP_SECRET } from "../../../types";
 import { callAliExpressApi, AliExpressClientConfig } from "../../../lib/aliexpress-client";
 import { TokenRepository } from "../../../lib/token-repository";
-import { parseCategoryDto } from "./categoryList";
 
-interface RawCategoryDto {
-	id: number;
-	isleaf: boolean;
-	level: number;
-	names?: string | Record<string, string>;
+interface RawDsCategoryItem {
+	category_id: number;
+	category_name: string;
+	parent_category_id?: number;
 }
 
-interface RawCategoryResponse {
-	result?: {
-		aeop_post_category_list?: {
-			aeop_post_category_dto?: RawCategoryDto[];
+interface RawDsCategoryResponse {
+	resp_result?: {
+		result?: {
+			total_result_count?: number;
+			categories?: {
+				category?: RawDsCategoryItem[];
+			};
 		};
-		success?: boolean;
-		error_message?: string;
 	};
 }
 
 /**
  * GET /aliexpress/categories/:parentId/subcategories
  * Retrieve immediate subcategories for a given parent category ID.
+ * Uses aliexpress.ds.category.get (same as categoryList) and filters client-side.
  */
 export class AliExpressSubCategoryList extends OpenAPIRoute {
 	public schema = {
 		tags: ["AliExpress - Categories"],
 		summary: "Get subcategories for a parent category",
 		description:
-			"Fetches direct child/subcategories for a specific parent category ID using the AliExpress Open Platform category hierarchy API.",
+			"Fetches direct child/subcategories for a specific parent category ID. Uses aliexpress.ds.category.get and filters the full category tree client-side by parent_category_id.",
 		request: {
 			params: z.object({
 				parentId: z.string().describe("Parent category ID (e.g., 509 for Cellphones & Telecommunications)"),
@@ -55,9 +55,7 @@ export class AliExpressSubCategoryList extends OpenAPIRoute {
 								z.object({
 									id: z.number(),
 									name: z.string(),
-									names: z.record(z.string()),
-									is_leaf: z.boolean(),
-									level: z.number(),
+									parent_id: z.number().optional(),
 								})
 							),
 							count: z.number(),
@@ -111,10 +109,11 @@ export class AliExpressSubCategoryList extends OpenAPIRoute {
 			}
 		}
 
-		const apiResponse = await callAliExpressApi<RawCategoryResponse>(
+		// Use aliexpress.ds.category.get (same as categoryList) — filter client-side
+		const apiResponse = await callAliExpressApi<RawDsCategoryResponse>(
 			config,
-			"aliexpress.category.redefining.getchildrenpostcategorybyid",
-			{ param0: parentId },
+			"aliexpress.ds.category.get",
+			{ app_signature: "true" },
 			sessionToken
 		);
 
@@ -129,17 +128,24 @@ export class AliExpressSubCategoryList extends OpenAPIRoute {
 			);
 		}
 
-		const categoryList =
-			apiResponse.data.result?.aeop_post_category_list?.aeop_post_category_dto || [];
+		const rawCategories =
+			apiResponse.data.resp_result?.result?.categories?.category || [];
 
-		const formatted = categoryList.map(parseCategoryDto);
+		// Filter client-side: only children whose parent_category_id matches parentId
+		const subcategories = rawCategories
+			.filter((cat) => cat.parent_category_id === parentId)
+			.map((cat) => ({
+				id: cat.category_id,
+				name: cat.category_name,
+				parent_id: cat.parent_category_id,
+			}));
 
 		return c.json({
 			success: true,
 			result: {
 				parent_id: parentId,
-				subcategories: formatted,
-				count: formatted.length,
+				subcategories,
+				count: subcategories.length,
 			},
 		});
 	}
