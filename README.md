@@ -29,12 +29,6 @@ Handles the complete OAuth 2.0 lifecycle and stores active seller tokens in Clou
 | `GET` | `/aliexpress/auth/token/:userId` | Retrieves token details and expiry status for a specific user ID. |
 | `DELETE` | `/aliexpress/auth/token/:userId` | Deletes stored token credentials for a user. |
 
-#### OAuth 2.0 Workflow:
-1. Call `GET /aliexpress/auth/authorize?redirect_uri=https://your-domain.com/callback`.
-2. Direct the seller to the returned `authorization_url`.
-3. Seller logs in and grants permission. AliExpress redirects to your callback with `?code=AUTH_CODE`.
-4. Call `POST /aliexpress/auth/token/create` with `{ "code": "AUTH_CODE", "user_id": "seller_1" }`.
-
 ---
 
 ### 2. Categories & Subcategories (`/aliexpress/categories/*`)
@@ -44,24 +38,22 @@ Interacts with `aliexpress.category.redefining.getchildrenpostcategorybyid`.
 |---|---|---|
 | `GET` | `/aliexpress/categories` | Gets root categories (pass `parent_id=0` or omit) or child categories (pass `parent_id=<id>`). |
 | `GET` | `/aliexpress/categories/:parentId/subcategories` | Gets direct subcategories for any given parent category ID (e.g. `509` for Phones & Telecommunications). |
-
-#### Query Parameters:
-* `parent_id` *(optional, default: 0)*: Parent category ID.
-* `user_id` *(optional)*: Specific seller whose authorized session should be attached to the request.
+| `GET` | `/aliexpress/categories/:categoryId/products` | Gets dropshipping product list filtered by a specific category or subcategory ID. |
 
 ---
 
-### 3. Dropshipping Product Discovery (`/aliexpress/products/*`)
-Interacts with `aliexpress.ds.recommend.feed.get` and `aliexpress.ds.product.get`.
+### 3. Dropshipping Product Discovery & Search (`/aliexpress/products/*`)
+Interacts with `aliexpress.ds.text.search`, `aliexpress.ds.recommend.feed.get`, and `aliexpress.ds.product.get`.
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/aliexpress/products` | Retrieves a feed of dropshipping products (bestsellers, trending, by category) with prices and ratings. |
+| `GET` | `/aliexpress/products/search` | **Search by Product Name / Keyword** (e.g. `?q=wireless+earbuds&category_id=509`). |
+| `GET` | `/aliexpress/products` | Retrieves curated dropshipping product feeds (bestsellers, trending) with prices, discounts, and ratings. |
 | `GET` | `/aliexpress/products/:productId` | Retrieves full product details including variants, SKUs, inventory, and images by product ID. |
 
-#### Product List Query Parameters:
-* `feed_name` *(default: "DS bestseller")*: Feed type (e.g., `DS bestseller`, `DS new arrival`).
-* `category_id` *(optional)*: Filter products by AliExpress category ID.
+#### Search Parameters (`/aliexpress/products/search`):
+* `q` *(required)*: Search query / product name keywords.
+* `category_id` *(optional)*: Constrain search to a category or subcategory ID.
 * `page_no` *(default: 1)*: Page number.
 * `page_size` *(default: 20, max 50)*: Number of items per page.
 * `country` *(default: "US")*: Destination country ISO code.
@@ -98,7 +90,7 @@ CREATE TABLE IF NOT EXISTS aliexpress_tokens (
 # Run migrations locally
 npm run seedLocalDb
 
-# Start local development server (with OpenAPI docs at http://localhost:8787/)
+# Start local development server (with Swagger docs at http://localhost:8787/)
 npm run dev
 
 # Run Vitest test suite

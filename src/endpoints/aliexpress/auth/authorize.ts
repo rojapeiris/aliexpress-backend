@@ -5,7 +5,7 @@ import { ALIEXPRESS_AUTH_URL } from "../../../lib/aliexpress-client";
 
 /**
  * GET /aliexpress/auth/authorize
- * Returns the OAuth authorization URL that the seller must visit
+ * Returns the OAuth authorization URL that the seller/customer must visit
  * to grant your app access to their AliExpress account.
  *
  * Docs: https://openservice.aliexpress.com/
@@ -15,10 +15,14 @@ export class AliExpressAuthorize extends OpenAPIRoute {
 		tags: ["AliExpress - Token Management"],
 		summary: "Get OAuth authorization URL",
 		description:
-			"Returns the AliExpress OAuth 2.0 authorization URL. Redirect the seller to this URL. After the seller signs in and grants permission, AliExpress redirects back to your redirect_uri with an authorization code parameter.",
+			"Returns the AliExpress OAuth 2.0 authorization URL. Redirect the user to this URL. You can pass a 'state' (e.g. customer_id or store_id) which AliExpress will return back to your callback.",
 		request: {
 			query: z.object({
 				redirect_uri: z.string().url().describe("Your OAuth callback URL"),
+				state: z
+					.string()
+					.optional()
+					.describe("Customer / user ID or custom state parameter to identify the customer upon return"),
 				force_auth: z
 					.enum(["true", "false"])
 					.optional()
@@ -47,13 +51,18 @@ export class AliExpressAuthorize extends OpenAPIRoute {
 		const data = await this.getValidatedData<typeof this.schema>();
 		const appKey = c.env.ALIEXPRESS_APP_KEY || DEFAULT_APP_KEY;
 
-		const params = new URLSearchParams({
+		const queryParams: Record<string, string> = {
 			response_type: "code",
 			client_id: appKey,
 			redirect_uri: data.query.redirect_uri,
 			force_auth: data.query.force_auth ?? "false",
-		});
+		};
 
+		if (data.query.state) {
+			queryParams.state = data.query.state;
+		}
+
+		const params = new URLSearchParams(queryParams);
 		const authorizationUrl = `${ALIEXPRESS_AUTH_URL}?${params.toString()}`;
 
 		return c.json({
@@ -62,7 +71,7 @@ export class AliExpressAuthorize extends OpenAPIRoute {
 				authorization_url: authorizationUrl,
 				client_id: appKey,
 				instructions:
-					"1. Open the authorization_url in a browser. 2. The seller logs in to AliExpress and authorizes the application. 3. AliExpress redirects to your redirect_uri with ?code=AUTHORIZATION_CODE. 4. Call POST /aliexpress/auth/token/create with that code to receive and save your access token.",
+					"1. Direct the customer/seller to authorization_url. 2. After they authorize, AliExpress redirects to redirect_uri with ?code=CODE&state=CUSTOMER_ID. 3. The callback saves their token mapped to their customer ID.",
 			},
 		});
 	}
