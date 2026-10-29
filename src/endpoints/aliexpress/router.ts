@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { fromHono } from "chanfana";
+import { cfCache } from "../../middleware/cache";
 import { AliExpressAuthorize } from "./auth/authorize";
 import { AliExpressAuthCallback } from "./auth/callback";
 import { AliExpressTokenCreate } from "./auth/tokenCreate";
@@ -15,7 +16,31 @@ import { AliExpressProductSearch } from "./products/productSearch";
 import { AliExpressProductDetail } from "./products/productDetail";
 import { AliExpressFeedNameList } from "./products/feedNameList";
 
-export const aliexpressRouter = fromHono(new Hono());
+const subApp = new Hono();
+
+// Cloudflare Workers Caching Middleware: 1 Day (86,400 seconds) for all data endpoints
+const ONE_DAY_SECONDS = 86400; // 24 hours
+
+// Categories
+subApp.use("/categories", cfCache(ONE_DAY_SECONDS));
+subApp.use("/categories/:parentId/subcategories", cfCache(ONE_DAY_SECONDS));
+
+// Feed Names
+subApp.use("/feeds", cfCache(ONE_DAY_SECONDS));
+
+// Category Products
+subApp.use("/categories/:categoryId/products", cfCache(ONE_DAY_SECONDS));
+
+// Products Feed List
+subApp.use("/products", cfCache(ONE_DAY_SECONDS));
+
+// Product Search
+subApp.use("/products/search", cfCache(ONE_DAY_SECONDS));
+
+// Product Details
+subApp.use("/products/:productId", cfCache(ONE_DAY_SECONDS));
+
+export const aliexpressRouter = fromHono(subApp);
 
 // Token Management Endpoints
 aliexpressRouter.get("/auth/authorize", AliExpressAuthorize);

@@ -41,6 +41,9 @@ describe("AliExpress API Endpoints", () => {
 			);
 
 			expect(res.status).toBe(200);
+			// Auth endpoints must NOT be cached
+			expect(res.headers.get("Cache-Control")).toBeNull();
+			expect(res.headers.get("X-Cache")).toBeNull();
 			const body = (await res.json()) as {
 				success: boolean;
 				result: { authorization_url: string; client_id: string };
@@ -58,6 +61,9 @@ describe("AliExpress API Endpoints", () => {
 		it("should return token list array", async () => {
 			const res = await SELF.fetch("http://local.test/aliexpress/auth/tokens");
 			expect(res.status).toBe(200);
+			// Auth endpoints must NOT be cached
+			expect(res.headers.get("Cache-Control")).toBeNull();
+			expect(res.headers.get("X-Cache")).toBeNull();
 			const body = (await res.json()) as { success: boolean; result: unknown[] };
 			expect(body.success).toBe(true);
 			expect(Array.isArray(body.result)).toBe(true);
@@ -99,6 +105,9 @@ describe("AliExpress API Endpoints", () => {
 
 			const res = await SELF.fetch("http://local.test/aliexpress/categories?parent_id=0");
 			expect(res.status).toBe(200);
+			// Categories must be cached with 24-hour TTL (86400s)
+			expect(res.headers.get("Cache-Control")).toContain("max-age=86400");
+			expect(res.headers.get("X-Cache")).toBeDefined();
 			const body = (await res.json()) as {
 				success: boolean;
 				result: {
@@ -153,6 +162,9 @@ describe("AliExpress API Endpoints", () => {
 
 			const res = await SELF.fetch("http://local.test/aliexpress/feeds");
 			expect(res.status).toBe(200);
+			// Feeds must be cached with 1-day TTL (86400s)
+			expect(res.headers.get("Cache-Control")).toContain("max-age=86400");
+			expect(res.headers.get("X-Cache")).toBeDefined();
 			const body = (await res.json()) as {
 				success: boolean;
 				result: {
@@ -210,6 +222,8 @@ describe("AliExpress API Endpoints", () => {
 				"http://local.test/aliexpress/products?feed_name=DS+bestseller&country=US&target_currency=USD"
 			);
 			expect(res.status).toBe(200);
+			expect(res.headers.get("Cache-Control")).toContain("max-age=86400");
+			expect(res.headers.get("X-Cache")).toBeDefined();
 			const body = (await res.json()) as {
 				success: boolean;
 				result: {
@@ -269,6 +283,9 @@ describe("AliExpress API Endpoints", () => {
 				"http://local.test/aliexpress/products/search?q=smart+watch&country=US&target_currency=USD"
 			);
 			expect(res.status).toBe(200);
+			// Search must be cached with 1-day TTL (86400s)
+			expect(res.headers.get("Cache-Control")).toContain("max-age=86400");
+			expect(res.headers.get("X-Cache")).toBeDefined();
 			const body = (await res.json()) as {
 				success: boolean;
 				result: {
@@ -327,6 +344,8 @@ describe("AliExpress API Endpoints", () => {
 				"http://local.test/aliexpress/categories/200003482/products?country=US&target_currency=USD"
 			);
 			expect(res.status).toBe(200);
+			expect(res.headers.get("Cache-Control")).toContain("max-age=86400");
+			expect(res.headers.get("X-Cache")).toBeDefined();
 			const body = (await res.json()) as {
 				success: boolean;
 				result: {
