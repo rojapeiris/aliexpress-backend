@@ -12,5 +12,9 @@
 			"database_name": "aliexpress-tokens",
 			"database_id": "1decbf51-43e3-41ec-8af5-1670c23b84b8"
 		}
-	]
+	],
+	"vars": {
+		"ALIEXPRESS_APP_KEY": "556446",
+		"ALIEXPRESS_APP_SECRET": "HusiSvXXSceP9mAcOl1317tqPlAPByG7"
+	}
 }
