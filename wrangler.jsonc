@@ -1,0 +1,16 @@
+{
+	"compatibility_date": "2025-10-08",
+	"main": "src/index.ts",
+	"name": "aliexpress-backend",
+	"upload_source_maps": true,
+	"observability": {
+		"enabled": true
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "aliexpress-tokens",
+			"database_id": "1decbf51-43e3-41ec-8af5-1670c23b84b8"
+		}
+	]
+}
