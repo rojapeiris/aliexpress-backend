@@ -104,7 +104,7 @@ export function resolveConfig(config?: AliExpressClientConfig): {
 }
 
 /**
- * Call system-level authentication APIs:
+ * Call system-level authentication APIs via POST:
  *  - /auth/token/create
  *  - /auth/token/refresh
  */
@@ -126,23 +126,37 @@ export async function callAuthApi<T = unknown>(
 	const sign = await generateSign(allParams, action, appSecret);
 	allParams["sign"] = sign;
 
-	const qs = new URLSearchParams(allParams).toString();
-	const url = `${ALIEXPRESS_GATEWAY}${action}?${qs}`;
+	const body = new URLSearchParams(allParams);
+	const url = `${ALIEXPRESS_GATEWAY}${action}`;
 
 	try {
+		// AliExpress token endpoints require POST with x-www-form-urlencoded
 		const response = await fetch(url, {
-			method: "GET",
+			method: "POST",
 			headers: {
+				"Content-Type": "application/x-www-form-urlencoded;charset=utf-8",
 				Accept: "application/json",
 			},
+			body: body.toString(),
 		});
 
-		const json = (await response.json()) as Record<string, unknown>;
+		const text = await response.text();
+		let json: Record<string, unknown>;
+
+		try {
+			json = JSON.parse(text);
+		} catch {
+			return {
+				success: false,
+				error: `AliExpress returned non-JSON response (HTTP ${response.status}): ${text.substring(0, 300)}`,
+				errorCode: String(response.status),
+			};
+		}
 
 		if (!response.ok) {
 			return {
 				success: false,
-				error: (json["message"] as string) || `HTTP ${response.status}: ${response.statusText}`,
+				error: (json["message"] as string) || (json["error_description"] as string) || `HTTP ${response.status}: ${response.statusText}`,
 				errorCode: String(response.status),
 			};
 		}
@@ -156,6 +170,15 @@ export async function callAuthApi<T = unknown>(
 				success: false,
 				error: errorResponse.sub_msg || errorResponse.msg,
 				errorCode: errorResponse.sub_code || errorResponse.code,
+			};
+		}
+
+		// Also check for sub-level error flags if returned
+		if (json["code"] && json["code"] !== 0 && json["code"] !== "0" && json["code"] !== 200) {
+			return {
+				success: false,
+				error: (json["message"] as string) || (json["msg"] as string) || "AliExpress error",
+				errorCode: String(json["code"]),
 			};
 		}
 
@@ -173,7 +196,8 @@ export async function callAuthApi<T = unknown>(
  *  - aliexpress.category.redefining.getchildrenpostcategorybyid
  *  - aliexpress.ds.recommend.feed.get
  *  - aliexpress.ds.product.get
- * Uses POST /sync endpoint or direct method invocation.
+ *  - aliexpress.ds.text.search
+ * Uses POST /sync endpoint.
  */
 export async function callAliExpressApi<T = unknown>(
 	config: AliExpressClientConfig | undefined,
@@ -216,7 +240,18 @@ export async function callAliExpressApi<T = unknown>(
 			body: body.toString(),
 		});
 
-		const json = (await response.json()) as Record<string, unknown>;
+		const text = await response.text();
+		let json: Record<string, unknown>;
+
+		try {
+			json = JSON.parse(text);
+		} catch {
+			return {
+				success: false,
+				error: `AliExpress returned non-JSON response (HTTP ${response.status}): ${text.substring(0, 300)}`,
+				errorCode: String(response.status),
+			};
+		}
 
 		if (!response.ok) {
 			return {

@@ -1,7 +1,7 @@
 import { OpenAPIRoute, contentJson } from "chanfana";
 import { z } from "zod";
 import { AppContext, DEFAULT_APP_KEY, DEFAULT_APP_SECRET } from "../../../types";
-import { callAuthApi, AliExpressClientConfig } from "../../../lib/aliexpress-client";
+import { callAuthApi, AliExpressClientConfig, ALIEXPRESS_AUTH_URL } from "../../../lib/aliexpress-client";
 import { TokenRepository } from "../../../lib/token-repository";
 
 interface CreateTokenApiResponse {
@@ -66,13 +66,15 @@ export class AliExpressAuthCallback extends OpenAPIRoute {
 	public async handle(c: AppContext) {
 		const data = await this.getValidatedData<typeof this.schema>();
 		const code = data.query.code;
+		const appKey = c.env.ALIEXPRESS_APP_KEY || DEFAULT_APP_KEY;
+		const appSecret = c.env.ALIEXPRESS_APP_SECRET || DEFAULT_APP_SECRET;
 
 		const config: AliExpressClientConfig = {
-			appKey: c.env.ALIEXPRESS_APP_KEY || DEFAULT_APP_KEY,
-			appSecret: c.env.ALIEXPRESS_APP_SECRET || DEFAULT_APP_SECRET,
+			appKey,
+			appSecret,
 		};
 
-		// Exchange code for token
+		// Exchange code for token via POST
 		const apiResult = await callAuthApi<CreateTokenApiResponse>(
 			config,
 			"/auth/token/create",
@@ -81,23 +83,47 @@ export class AliExpressAuthCallback extends OpenAPIRoute {
 
 		if (!apiResult.success || !apiResult.data) {
 			const errorMsg = apiResult.error ?? "Failed to retrieve access token from AliExpress";
-			const acceptsHtml = c.req.header("Accept")?.includes("text/html");
+			const errorCode = apiResult.errorCode ?? "";
+			const currentUrl = new URL(c.req.url);
+			const retryAuthUrl = `${ALIEXPRESS_AUTH_URL}?response_type=code&force_auth=true&redirect_uri=${encodeURIComponent(
+				`${currentUrl.origin}/aliexpress/auth/callback`
+			)}&client_id=${appKey}`;
+
+			const acceptsHtml = c.req.header("Accept")?.includes("text/html") ?? true;
 
 			if (acceptsHtml) {
 				return c.html(
 					`<!DOCTYPE html>
 					<html>
-					<head><title>AliExpress Authorization Failed</title>
-					<style>body{font-family:sans-serif;padding:40px;background:#fdf2f2;color:#991b1b;}</style></head>
+					<head>
+						<title>AliExpress Authorization</title>
+						<meta name="viewport" content="width=device-width, initial-scale=1">
+						<style>
+							body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 40px 20px; background: #fdf2f2; color: #991b1b; max-width: 600px; margin: 0 auto; }
+							.card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); border: 1px solid #fecaca; }
+							.badge { display: inline-block; padding: 4px 12px; background: #fee2e2; color: #991b1b; border-radius: 9999px; font-weight: 600; font-size: 14px; margin-bottom: 12px; }
+							h2 { margin-top: 0; color: #7f1d1d; }
+							p { color: #475569; line-height: 1.5; }
+							.err-box { background: #fef2f2; border-left: 4px solid #ef4444; padding: 12px 16px; margin: 16px 0; font-family: monospace; color: #b91c1c; word-break: break-all; }
+							.btn { display: inline-block; background: #e11d48; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-weight: 600; margin-top: 12px; }
+						</style>
+					</head>
 					<body>
-					<h2>❌ Authorization Failed</h2>
-					<p>${errorMsg}</p>
-					</body></html>`,
+						<div class="card">
+							<span class="badge">Authorization Status</span>
+							<h2>AliExpress Response Details</h2>
+							<p>AliExpress returned the following message when exchanging the authorization code:</p>
+							<div class="err-box">${errorMsg} ${errorCode ? `(Code: ${errorCode})` : ""}</div>
+							<p><small>Note: AliExpress authorization codes expire within ~3 minutes and can only be exchanged once. If expired, please authorize again:</small></p>
+							<a href="${retryAuthUrl}" class="btn">Retry Authorization</a>
+						</div>
+					</body>
+					</html>`,
 					400
 				);
 			}
 
-			return c.json({ success: false, error: errorMsg }, 400);
+			return c.json({ success: false, error: errorMsg, errorCode }, 400);
 		}
 
 		const tokenData = apiResult.data;
@@ -128,7 +154,7 @@ export class AliExpressAuthCallback extends OpenAPIRoute {
 			refresh_token_expires_at: refreshTokenExpiresAt,
 		});
 
-		const acceptsHtml = c.req.header("Accept")?.includes("text/html");
+		const acceptsHtml = c.req.header("Accept")?.includes("text/html") ?? true;
 		if (acceptsHtml) {
 			return c.html(
 				`<!DOCTYPE html>
@@ -150,7 +176,7 @@ export class AliExpressAuthCallback extends OpenAPIRoute {
 					<div class="card">
 						<span class="badge">✓ Connected Successfully</span>
 						<h2>AliExpress Token Saved</h2>
-						<p>Your AliExpress seller account is authorized and the token has been saved to your Cloudflare D1 database.</p>
+						<p>Your AliExpress account has been authorized and the token is stored in your Cloudflare D1 database.</p>
 						<div class="field"><strong>User / Seller ID:</strong> <span>${userId}</span></div>
 						${tokenData.user_nick ? `<div class="field"><strong>Nick / Store:</strong> <span>${tokenData.user_nick}</span></div>` : ""}
 						<div class="field"><strong>Access Token:</strong> <span>${tokenData.access_token.substring(0, 10)}...${tokenData.access_token.slice(-6)}</span></div>
