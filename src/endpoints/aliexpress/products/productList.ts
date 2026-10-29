@@ -51,8 +51,8 @@ export class AliExpressProductList extends OpenAPIRoute {
 				feed_name: z
 					.string()
 					.optional()
-					.default("DS bestseller")
-					.describe("Recommendation feed name (e.g. 'DS bestseller', 'DS new arrival')"),
+					.default("DS_Home&Kitchen_bestsellers")
+					.describe("Recommendation feed name. Use GET /aliexpress/feeds to list valid names (e.g. 'DS_Home&Kitchen_bestsellers', 'DS_NewArrivals', 'DS_ConsumerElectronics_bestsellers')"),
 				category_id: z
 					.string()
 					.optional()
@@ -160,7 +160,7 @@ export class AliExpressProductList extends OpenAPIRoute {
 		}
 
 		const params: Record<string, string | number> = {
-			feed_name: query.feed_name || "DS bestseller",
+			feed_name: query.feed_name || "DS_Home&Kitchen_bestsellers",
 			page_no: parseInt(query.page_no || "1", 10),
 			page_size: Math.min(parseInt(query.page_size || "20", 10), 50),
 			country: query.country || "US",
@@ -212,7 +212,7 @@ export class AliExpressProductList extends OpenAPIRoute {
 		return c.json({
 			success: true,
 			result: {
-				feed_name: query.feed_name || "DS bestseller",
+				feed_name: query.feed_name || "DS_Home&Kitchen_bestsellers",
 				current_page: feedData?.current_page_no ?? parseInt(query.page_no || "1", 10),
 				page_size: parseInt(query.page_size || "20", 10),
 				total_pages: feedData?.total_page_no,

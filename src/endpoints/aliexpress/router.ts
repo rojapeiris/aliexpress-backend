@@ -13,6 +13,7 @@ import { AliExpressCategoryProducts } from "./categories/categoryProducts";
 import { AliExpressProductList } from "./products/productList";
 import { AliExpressProductSearch } from "./products/productSearch";
 import { AliExpressProductDetail } from "./products/productDetail";
+import { AliExpressFeedNameList } from "./products/feedNameList";
 
 export const aliexpressRouter = fromHono(new Hono());
 
@@ -31,6 +32,7 @@ aliexpressRouter.get("/categories/:parentId/subcategories", AliExpressSubCategor
 aliexpressRouter.get("/categories/:categoryId/products", AliExpressCategoryProducts);
 
 // Products Endpoints
+aliexpressRouter.get("/feeds", AliExpressFeedNameList);
 // Note: /products/search must precede /products/:productId to prevent route shadowing
 aliexpressRouter.get("/products/search", AliExpressProductSearch);
 aliexpressRouter.get("/products", AliExpressProductList);

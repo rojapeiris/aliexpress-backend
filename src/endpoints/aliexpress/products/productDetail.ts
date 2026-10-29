@@ -5,6 +5,59 @@ import { callAliExpressApi, AliExpressClientConfig } from "../../../lib/aliexpre
 import { TokenRepository } from "../../../lib/token-repository";
 
 interface RawProductDetailResponse {
+	resp_result?: {
+		resp_code?: number;
+		resp_msg?: string;
+		result?: {
+			ae_item_base_info_dto?: {
+				subject?: string;
+				category_id?: number;
+				product_id?: number | string;
+				product_status_type?: string;
+				detail?: string;
+				mobile_detail?: string;
+			};
+			ae_item_sku_info_dtos?: {
+				ae_item_sku_info_d_t_o?: Array<{
+					id?: string;
+					sku_id?: string;
+					sku_price?: string;
+					offer_sale_price?: string;
+					sku_stock?: boolean;
+					ipm_sku_stock?: number;
+					currency_code?: string;
+					sku_code?: string;
+					sku_available_stock?: number;
+					ae_sku_property_dtos?: {
+						ae_sku_property_d_t_o?: Array<{
+							sku_property_id?: number;
+							sku_property_name?: string;
+							property_value_id?: number;
+							property_value_definition_name?: string;
+							sku_image?: string;
+						}>;
+					};
+				}>;
+			};
+			ae_multimedia_info_dto?: {
+				image_urls?: string;
+				ae_video_dtos?: {
+					ae_video_d_t_o?: Array<{ media_url?: string; poster_url?: string }>;
+				};
+			};
+			package_info_dto?: {
+				gross_weight?: string;
+				package_height?: number;
+				package_length?: number;
+				package_width?: number;
+			};
+			logistics_info_dto?: {
+				delivery_time?: number;
+				ship_to_country?: string;
+			};
+		};
+	};
+	// Legacy format fallback
 	result?: {
 		aeop_a_e_multimedia?: {
 			aeop_a_e_videos?: Array<{ media_url?: string; poster_url?: string }>;
@@ -33,7 +86,6 @@ interface RawProductDetailResponse {
 		product_id?: number | string;
 		subject?: string;
 		owner_member_id?: string;
-		ws_offline_date?: string;
 		package_info?: {
 			gross_weight?: string;
 			package_height?: number;
@@ -178,7 +230,60 @@ export class AliExpressProductDetail extends OpenAPIRoute {
 			);
 		}
 
-		const detail = apiResponse.data.result;
+		const data2 = apiResponse.data;
+
+		// Handle new DS response shape (resp_result.result) and legacy shape (result)
+		const dsResult = data2.resp_result?.result;
+		const legacyDetail = data2.result;
+
+		// Check for DS API error
+		if (data2.resp_result && data2.resp_result.resp_code && data2.resp_result.resp_code !== 200) {
+			return c.json(
+				{
+					success: false,
+					error: data2.resp_result.resp_msg || "AliExpress product not found",
+					errorCode: String(data2.resp_result.resp_code),
+				},
+				400
+			);
+		}
+
+		if (dsResult) {
+			// New DS format
+			const baseInfo = dsResult.ae_item_base_info_dto;
+			const rawSkus = dsResult.ae_item_sku_info_dtos?.ae_item_sku_info_d_t_o || [];
+			const imageUrls = dsResult.ae_multimedia_info_dto?.image_urls?.split(";").filter(Boolean) || [];
+
+			const skus = rawSkus.map((s) => ({
+				sku_id: s.sku_id || s.id,
+				price: s.sku_price,
+				sale_price: s.offer_sale_price || s.sku_price,
+				stock: s.ipm_sku_stock ?? s.sku_available_stock,
+				currency: s.currency_code || query.target_currency || "USD",
+				sku_code: s.sku_code,
+				properties: s.ae_sku_property_dtos?.ae_sku_property_d_t_o?.map((prop) => ({
+					name: prop.sku_property_name,
+					value: prop.property_value_definition_name,
+					image: prop.sku_image,
+				})),
+			}));
+
+			return c.json({
+				success: true,
+				result: {
+					product_id: String(baseInfo?.product_id ?? productId),
+					title: baseInfo?.subject,
+					status: baseInfo?.product_status_type,
+					category_id: baseInfo?.category_id,
+					images: imageUrls,
+					skus,
+					raw_detail: dsResult as unknown as Record<string, unknown>,
+				},
+			});
+		}
+
+		// Legacy format fallback
+		const detail = legacyDetail;
 		const rawSkus = detail?.aeop_ae_product_s_k_us?.aeop_ae_product_sku || [];
 
 		const skus = rawSkus.map((s) => ({

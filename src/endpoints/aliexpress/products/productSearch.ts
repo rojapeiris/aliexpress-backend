@@ -190,7 +190,7 @@ export class AliExpressProductSearch extends OpenAPIRoute {
 			page_size: pageSize,
 			countryCode: query.country || "US",
 			currency: query.target_currency || "USD",
-			locale: (query.target_language || "EN").toLowerCase(),
+			local: (query.target_language || "EN").toLowerCase(),
 		};
 
 		if (query.category_id) {
@@ -244,7 +244,7 @@ export class AliExpressProductSearch extends OpenAPIRoute {
 
 		// Fallback to aliexpress.ds.recommend.feed.get if text.search isn't available or fails
 		const fallbackParams: Record<string, string | number> = {
-			feed_name: "DS bestseller",
+			feed_name: "DS_Home&Kitchen_bestsellers",
 			page_no: pageNo,
 			page_size: pageSize,
 			country: query.country || "US",

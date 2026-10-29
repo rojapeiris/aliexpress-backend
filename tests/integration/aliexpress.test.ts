@@ -71,28 +71,26 @@ describe("AliExpress API Endpoints", () => {
 				if (typeof url === "string" && url.includes("/sync")) {
 					return new Response(
 						JSON.stringify({
-							aliexpress_category_redefining_getchildrenpostcategorybyid_response: {
-								result: {
-									success: true,
-									aeop_post_category_list: {
-										aeop_post_category_dto: [
-											{
-												id: 509,
-												isleaf: false,
-												level: 1,
-												names: JSON.stringify({ en: "Phones & Telecommunications" }),
+										aliexpress_ds_category_get_response: {
+											resp_result: {
+												result: {
+													total_result_count: 2,
+													categories: {
+														category: [
+															{
+																category_id: 509,
+																category_name: "Phones & Telecommunications",
+															},
+															{
+																category_id: 1509,
+																category_name: "Consumer Electronics",
+															},
+														],
+													},
+												},
 											},
-											{
-												id: 1509,
-												isleaf: false,
-												level: 1,
-												names: JSON.stringify({ en: "Consumer Electronics" }),
-											},
-										],
-									},
-								},
-							},
-						}),
+										},
+									}),
 						{ status: 200, headers: { "Content-Type": "application/json" } }
 					);
 				}
@@ -105,7 +103,7 @@ describe("AliExpress API Endpoints", () => {
 				success: boolean;
 				result: {
 					parent_id: number;
-					categories: Array<{ id: number; name: string; is_leaf: boolean }>;
+					categories: Array<{ id: number; name: string }>;
 					count: number;
 				};
 			};
@@ -113,6 +111,59 @@ describe("AliExpress API Endpoints", () => {
 			expect(body.success).toBe(true);
 			expect(body.result.categories.length).toBe(2);
 			expect(body.result.categories[0].name).toBe("Phones & Telecommunications");
+
+			globalThis.fetch = originalFetch;
+		});
+	});
+
+	describe("GET /aliexpress/feeds with mock upstream", () => {
+		it("should return the list of available feed names", async () => {
+			const originalFetch = globalThis.fetch;
+			globalThis.fetch = vi.fn().mockImplementation(async (url: string) => {
+				if (typeof url === "string" && url.includes("/sync")) {
+					return new Response(
+						JSON.stringify({
+							aliexpress_ds_feedname_get_response: {
+								resp_result: {
+									result: {
+										current_record_count: 2,
+										promos: {
+											promo: [
+												{
+													promo_name: "DS_Home&Kitchen_bestsellers",
+													promo_desc: "Home and Kitchen bestsellers",
+													product_num: 8791,
+												},
+												{
+													promo_name: "DS_NewArrivals",
+													promo_desc: "New Arrivals",
+													product_num: 8220,
+												},
+											],
+										},
+									},
+								},
+							},
+						}),
+						{ status: 200, headers: { "Content-Type": "application/json" } }
+					);
+				}
+				return originalFetch(url);
+			});
+
+			const res = await SELF.fetch("http://local.test/aliexpress/feeds");
+			expect(res.status).toBe(200);
+			const body = (await res.json()) as {
+				success: boolean;
+				result: {
+					total_count: number;
+					feeds: Array<{ name: string; description: string; product_count: number }>;
+				};
+			};
+
+			expect(body.success).toBe(true);
+			expect(body.result.total_count).toBe(2);
+			expect(body.result.feeds[0].name).toBe("DS_Home&Kitchen_bestsellers");
 
 			globalThis.fetch = originalFetch;
 		});
