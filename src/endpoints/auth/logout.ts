@@ -1,7 +1,7 @@
 import { OpenAPIRoute, contentJson } from "chanfana";
 import { z } from "zod";
 import { AppContext } from "../../types";
-import { SupabaseClient, hashToken } from "../../lib/supabase-client";
+import { SupabaseClient } from "../../lib/supabase-client";
 
 /**
  * POST /auth/logout
@@ -43,7 +43,7 @@ export class AuthLogout extends OpenAPIRoute {
 	};
 
 	public async handle(c: AppContext) {
-		const authHeader = c.req.header("Authorization") || "";
+		const authHeader = c.req.header("Authorization") || c.req.header("x-session-token") || "";
 		const token = authHeader.replace(/^Bearer\s+/i, "").trim();
 
 		if (!token) {
@@ -61,8 +61,7 @@ export class AuthLogout extends OpenAPIRoute {
 			key: c.env.SUPABASE_SERVICE_ROLE_KEY || c.env.SUPABASE_KEY,
 		});
 
-		const tokenHash = await hashToken(token);
-		await supabase.deleteSession(tokenHash);
+		await supabase.deleteSession(token);
 
 		return c.json({
 			success: true,

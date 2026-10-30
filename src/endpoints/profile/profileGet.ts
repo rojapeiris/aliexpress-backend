@@ -1,7 +1,7 @@
 import { OpenAPIRoute, contentJson } from "chanfana";
 import { z } from "zod";
 import { AppContext } from "../../types";
-import { SupabaseClient } from "../../lib/supabase-client";
+import { getUserFromSession } from "../../lib/supabase-client";
 
 /**
  * GET /profile
@@ -61,14 +61,7 @@ export class ProfileGet extends OpenAPIRoute {
 	};
 
 	public async handle(c: AppContext) {
-		const authHeader = c.req.header("Authorization");
-
-		const supabase = new SupabaseClient({
-			url: c.env.SUPABASE_URL,
-			key: c.env.SUPABASE_SERVICE_ROLE_KEY || c.env.SUPABASE_KEY,
-		});
-
-		const { session, profile, error: authError } = await supabase.authenticateBearer(authHeader);
+		const { session, profile, error: authError } = await getUserFromSession(c);
 		if (authError || !session || !profile) {
 			return c.json(
 				{

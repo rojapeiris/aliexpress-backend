@@ -1,7 +1,7 @@
 import { OpenAPIRoute, contentJson } from "chanfana";
 import { z } from "zod";
 import { AppContext } from "../../types";
-import { SupabaseClient, hashToken } from "../../lib/supabase-client";
+import { getUserFromSession } from "../../lib/supabase-client";
 
 /**
  * GET /auth/me
@@ -58,38 +58,16 @@ export class AuthMe extends OpenAPIRoute {
 	};
 
 	public async handle(c: AppContext) {
-		const authHeader = c.req.header("Authorization") || "";
-		const token = authHeader.replace(/^Bearer\s+/i, "").trim();
-
-		if (!token) {
+		const { session, profile, error: authError } = await getUserFromSession(c);
+		if (authError || !session) {
 			return c.json(
 				{
 					success: false,
-					error: "Missing or invalid Authorization header. Expected 'Bearer <token>'.",
+					error: authError || "Session is invalid or has expired. Please authenticate again with OTP.",
 				},
 				401
 			);
 		}
-
-		const supabase = new SupabaseClient({
-			url: c.env.SUPABASE_URL,
-			key: c.env.SUPABASE_SERVICE_ROLE_KEY || c.env.SUPABASE_KEY,
-		});
-
-		const tokenHash = await hashToken(token);
-		const session = await supabase.findSessionByTokenHash(tokenHash);
-
-		if (!session) {
-			return c.json(
-				{
-					success: false,
-					error: "Session is invalid or has expired. Please authenticate again with OTP.",
-				},
-				401
-			);
-		}
-
-		const profile = await supabase.getProfileByPhone(session.phone);
 
 		return c.json({
 			success: true,

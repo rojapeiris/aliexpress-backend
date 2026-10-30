@@ -2,6 +2,7 @@
  * Supabase Client & Database Services for Cloudflare Workers
  * Uses native fetch and Web Crypto API. Zero heavy external dependencies.
  */
+import type { AppContext } from "../types";
 
 export interface SupabaseConfig {
 	url?: string;
@@ -305,15 +306,16 @@ export class SupabaseClient {
 	}
 
 	/**
-	 * Retrieves an active session by token hash
+	 * Retrieves an active session by token hash directly from custom 'app_sessions' table.
+	 * Checks expiration in code to avoid database timestamp formatting issues.
 	 */
 	async findSessionByTokenHash(tokenHash: string): Promise<AppSessionRecord | null> {
-		const nowIso = new Date().toISOString();
+		if (!this.isConfigured()) return null;
+
 		const { data, error } = await this.rest<AppSessionRecord[]>("app_sessions", {
 			method: "GET",
 			params: {
 				token_hash: `eq.${tokenHash}`,
-				expires_at: `gt.${nowIso}`,
 				select: "*",
 				limit: "1",
 			},
@@ -323,21 +325,68 @@ export class SupabaseClient {
 			return null;
 		}
 
-		return data[0];
+		const session = data[0];
+
+		// Check expiration timestamp
+		if (session.expires_at) {
+			const expiresMs = new Date(session.expires_at).getTime();
+			if (!isNaN(expiresMs) && expiresMs <= Date.now()) {
+				return null; // Expired
+			}
+		}
+
+		return session;
 	}
 
 	/**
-	 * Deletes a session by token hash (logout)
+	 * Finds an active session from 'app_sessions' table.
+	 * Tries both the computed SHA-256 hash of the token AND the token string directly,
+	 * ensuring sessions work whether the hash or token was saved in token_hash column.
 	 */
-	async deleteSession(tokenHash: string): Promise<boolean> {
-		const { error } = await this.rest("app_sessions", {
+	async findSessionByToken(token: string): Promise<AppSessionRecord | null> {
+		if (!this.isConfigured() || !token) return null;
+
+		// 1. Try matching SHA-256 hash
+		const tokenHash = await hashToken(token);
+		let session = await this.findSessionByTokenHash(tokenHash);
+		if (session) return session;
+
+		// 2. Fallback: Try matching raw token in token_hash
+		if (token !== tokenHash) {
+			session = await this.findSessionByTokenHash(token);
+			if (session) return session;
+		}
+
+		return null;
+	}
+
+	/**
+	 * Deletes a session by token or token hash (logout)
+	 */
+	async deleteSession(tokenOrHash: string): Promise<boolean> {
+		if (!this.isConfigured() || !tokenOrHash) return true;
+
+		const tokenHash = await hashToken(tokenOrHash);
+
+		// Delete by computed hash
+		const { error: err1 } = await this.rest("app_sessions", {
 			method: "DELETE",
 			params: {
 				token_hash: `eq.${tokenHash}`,
 			},
 		});
 
-		return !error;
+		// Also try deleting by raw string if different
+		if (tokenOrHash !== tokenHash) {
+			await this.rest("app_sessions", {
+				method: "DELETE",
+				params: {
+					token_hash: `eq.${tokenOrHash}`,
+				},
+			});
+		}
+
+		return !err1;
 	}
 
 	/**
@@ -367,18 +416,26 @@ export class SupabaseClient {
 	}
 
 	/**
-	 * Authenticates incoming request from Bearer Authorization header
+	 * Resolves user profile and session from the token sent in headers.
+	 * 
+	 * NOTE: This is NOT Supabase's built-in Auth (GoTrue/JWT).
+	 * This verifies the custom session token created during Ideamart OTP verification
+	 * against the 'app_sessions' table and joins to 'profiles'.
 	 */
-	async authenticateBearer(
-		authHeader?: string
+	async getUserFromToken(
+		authHeaderOrToken?: string
 	): Promise<{ session: AppSessionRecord | null; profile: ProfileRecord | null; error: string | null }> {
-		const token = (authHeader || "").replace(/^Bearer\s+/i, "").trim();
+		const token = (authHeaderOrToken || "").replace(/^Bearer\s+/i, "").trim();
 		if (!token) {
-			return { session: null, profile: null, error: "Missing or invalid Authorization header. Expected 'Bearer <token>'." };
+			return {
+				session: null,
+				profile: null,
+				error: "Missing or invalid Authorization header. Expected 'Bearer <token>'.",
+			};
 		}
 
-		const tokenHash = await hashToken(token);
-		const session = await this.findSessionByTokenHash(tokenHash);
+		// 1. Look up session in custom app_sessions table
+		const session = await this.findSessionByToken(token);
 
 		if (!session) {
 			// If Supabase is unconfigured (testing/offline mode), accept mock bearer tokens gracefully
@@ -387,7 +444,7 @@ export class SupabaseClient {
 				return {
 					session: {
 						id: crypto.randomUUID(),
-						token_hash: tokenHash,
+						token_hash: await hashToken(token),
 						phone: fallbackPhone,
 						expires_at: new Date(Date.now() + 86400000).toISOString(),
 						created_at: new Date().toISOString(),
@@ -402,11 +459,31 @@ export class SupabaseClient {
 				};
 			}
 
-			return { session: null, profile: null, error: "Session is invalid or has expired. Please authenticate with OTP." };
+			return {
+				session: null,
+				profile: null,
+				error: "Session is invalid or has expired. Please authenticate with OTP.",
+			};
 		}
 
-		const profile = await this.getProfileByPhone(session.phone);
+		// 2. Retrieve user profile by phone
+		let profile = await this.getProfileByPhone(session.phone);
+		if (!profile) {
+			// Auto-ensure profile exists so valid session is never rejected
+			profile = await this.ensureProfile(session.phone);
+		}
+
 		return { session, profile, error: null };
+	}
+
+	/**
+	 * Authenticates incoming request from Bearer Authorization header
+	 * Alias to getUserFromToken for backward compatibility
+	 */
+	async authenticateBearer(
+		authHeader?: string
+	): Promise<{ session: AppSessionRecord | null; profile: ProfileRecord | null; error: string | null }> {
+		return this.getUserFromToken(authHeader);
 	}
 
 	/**
@@ -877,5 +954,31 @@ export class SupabaseClient {
 
 		return { stats, error: null };
 	}
+}
+
+/**
+ * Helper to get active user profile and session directly from Hono/Chanfana request context.
+ * Queries custom 'app_sessions' table (Ideamart OTP session), NOT Supabase Auth.
+ */
+export async function getUserFromSession(
+	c: AppContext
+): Promise<{
+	session: AppSessionRecord | null;
+	profile: ProfileRecord | null;
+	error: string | null;
+	supabase: SupabaseClient;
+}> {
+	const authHeader = c.req.header("Authorization") || c.req.header("x-session-token");
+	const supabase = new SupabaseClient({
+		url: c.env.SUPABASE_URL,
+		key: c.env.SUPABASE_SERVICE_ROLE_KEY || c.env.SUPABASE_KEY,
+	});
+	const auth = await supabase.getUserFromToken(authHeader);
+	return {
+		session: auth.session,
+		profile: auth.profile,
+		error: auth.error,
+		supabase,
+	};
 }
 
