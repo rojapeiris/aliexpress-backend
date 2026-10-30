@@ -18,6 +18,7 @@ export class GetOrderList extends OpenAPIRoute {
 			headers: z.object({
 				authorization: z
 					.string()
+					.optional()
 					.describe("Bearer <session_token> obtained from OTP verification"),
 			}),
 			query: z.object({
@@ -91,12 +92,19 @@ export class GetOrderList extends OpenAPIRoute {
 					})
 				),
 			},
+			"400": {
+				description: "Bad Request – failed to fetch orders",
+				...contentJson(
+					z.object({
+						success: z.boolean(),
+						error: z.string(),
+					})
+				),
+			},
 		},
 	};
 
 	public async handle(c: AppContext) {
-		const data = await this.getValidatedData<typeof this.schema>();
-		const { page_no, page_size, status } = data.query;
 		const authHeader = c.req.header("Authorization");
 
 		const supabase = new SupabaseClient({
@@ -104,7 +112,7 @@ export class GetOrderList extends OpenAPIRoute {
 			key: c.env.SUPABASE_SERVICE_ROLE_KEY || c.env.SUPABASE_KEY,
 		});
 
-		// Authenticate session
+		// Authenticate session first
 		const { session, error: authError } = await supabase.authenticateBearer(authHeader);
 		if (authError || !session) {
 			return c.json(
@@ -115,6 +123,9 @@ export class GetOrderList extends OpenAPIRoute {
 				401
 			);
 		}
+
+		const data = await this.getValidatedData<typeof this.schema>();
+		const { page_no, page_size, status } = data.query;
 
 		// Fetch orders from Supabase
 		const { orders, total, error: fetchError } = await supabase.getOrdersByPhone(session.phone, {
@@ -129,7 +140,7 @@ export class GetOrderList extends OpenAPIRoute {
 					success: false,
 					error: fetchError,
 				},
-				400 as never
+				400
 			);
 		}
 

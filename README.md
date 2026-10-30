@@ -63,6 +63,31 @@ Interacts with `aliexpress.ds.text.search`, `aliexpress.ds.recommend.feed.get`, 
 
 ---
 
+### 4. Customer Profile (`/profile`)
+Persists and retrieves customer profiles (name, email, shipping addresses, phone, subscriber ID) in Supabase. Authenticated via `Bearer <session_token>`.
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/profile` | Retrieves current customer profile and shipping address. |
+| `PATCH` | `/profile` | Partially updates user profile fields (name, email, avatar, address, city, etc.). |
+| `PUT` | `/profile` | Full/idempotent update of customer profile details. |
+| `DELETE` | `/profile` | Deletes user profile and terminates all active sessions. |
+
+---
+
+### 5. Customer Orders (`/orders`)
+Enables dropshipping checkout, customer order tracking, cancellation, and metrics. Authenticated via `Bearer <session_token>`.
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/orders` | Places a new dropshipping order with items, shipping address, and payment method. Auto-calculates totals and sets status to `pending`. |
+| `GET` | `/orders` | Returns a paginated list of orders for the customer with optional `status` filter (`page_no`, `page_size`). |
+| `GET` | `/orders/stats` | Returns real-time counts of customer orders categorized by status (`pending`, `paid`, `processing`, `shipped`, `delivered`, `cancelled`). |
+| `GET` | `/orders/:orderId` | Retrieves full order details including line items, shipping address, and AliExpress tracking number by UUID or Order Number (`ORD-...`). |
+| `POST` | `/orders/:orderId/cancel` | Cancels an order in `pending`, `paid`, or `processing` status with an optional cancellation reason. |
+
+---
+
 ## 🛠 Database Schema
 
 Applied via Cloudflare D1 migration (`migrations/0002_aliexpress_tokens.sql`):

@@ -3,6 +3,8 @@ import { Hono } from "hono";
 import { ContentfulStatusCode } from "hono/utils/http-status";
 import { aliexpressRouter } from "./endpoints/aliexpress/router";
 import { mobileAuthRouter } from "./endpoints/auth/router";
+import { profileRouter } from "./endpoints/profile/router";
+import { ordersRouter } from "./endpoints/orders/router";
 import { AppEnv } from "./types";
 
 // Start a Hono app
@@ -36,13 +38,15 @@ const openapi = fromHono(app, {
 			title: "AliExpress Dropshipping Platform API",
 			version: "1.0.0",
 			description:
-				"API integration for AliExpress dropshipping platform using the official Open Platform specification (https://openservice.aliexpress.com/). Provides complete OAuth token management, category tree exploration, and dropshipping product discovery.",
+				"API integration for AliExpress dropshipping platform using the official Open Platform specification. Provides complete OAuth token management, category tree exploration, dropshipping product discovery, Ideamart OTP mobile auth, customer profiles, and order management.",
 		},
 	},
 });
 
 // Register Sub routers
 openapi.route("/auth", mobileAuthRouter);
+openapi.route("/profile", profileRouter);
+openapi.route("/orders", ordersRouter);
 openapi.route("/aliexpress", aliexpressRouter);
 
 // Export the Hono app

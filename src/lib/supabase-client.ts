@@ -618,6 +618,33 @@ export class SupabaseClient {
 	}
 
 	/**
+	 * Deletes user profile and all active sessions
+	 */
+	async deleteProfile(phone: string): Promise<{ success: boolean; error: string | null }> {
+		if (!this.isConfigured()) {
+			return { success: true, error: null };
+		}
+
+		// Delete sessions first
+		await this.rest("app_sessions", {
+			method: "DELETE",
+			params: { phone: `eq.${phone}` },
+		});
+
+		// Delete profile
+		const { error } = await this.rest("profiles", {
+			method: "DELETE",
+			params: { phone: `eq.${phone}` },
+		});
+
+		if (error) {
+			return { success: false, error };
+		}
+
+		return { success: true, error: null };
+	}
+
+	/**
 	 * Retrieves single order details by ID or order_number
 	 */
 	async getOrderByIdOrNumber(
@@ -625,22 +652,87 @@ export class SupabaseClient {
 		orderIdOrNumber: string
 	): Promise<{ order: OrderWithItemsRecord | null; error: string | null }> {
 		if (!this.isConfigured()) {
-			return { order: null, error: "Supabase not configured." };
+			const isOrderNum = orderIdOrNumber.startsWith("ORD-");
+			return {
+				order: {
+					id: isOrderNum ? crypto.randomUUID() : orderIdOrNumber,
+					order_number: isOrderNum ? orderIdOrNumber : "ORD-20261030-MOCK",
+					user_phone: phone,
+					status: "pending",
+					total_amount: 5400,
+					currency: "LKR",
+					payment_method: "cod",
+					payment_status: "pending",
+					payment_reference: null,
+					shipping_address: {
+						full_name: "Mock Customer",
+						phone,
+						address_line1: "123 Galle Road",
+						city: "Colombo",
+						country: "LK",
+					},
+					aliexpress_order_id: null,
+					tracking_number: null,
+					notes: null,
+					created_at: new Date().toISOString(),
+					updated_at: new Date().toISOString(),
+					items: [
+						{
+							id: crypto.randomUUID(),
+							order_id: isOrderNum ? crypto.randomUUID() : orderIdOrNumber,
+							product_id: "1005006234567890",
+							product_title: "Wireless Bluetooth Earbuds",
+							product_image: "https://ae01.alicdn.com/kf/test.jpg",
+							unit_price: 2700,
+							quantity: 2,
+							total_price: 5400,
+							currency: "LKR",
+						},
+					],
+				},
+				error: null,
+			};
 		}
 
-		// Try by ID or order_number
-		const filter = orderIdOrNumber.includes("-")
-			? `user_phone=eq.${phone}&order_number=eq.${orderIdOrNumber}`
-			: `user_phone=eq.${phone}&id=eq.${orderIdOrNumber}`;
+		// Match by order_number if it starts with ORD-, otherwise by id (UUID)
+		const isOrderNumber = orderIdOrNumber.startsWith("ORD-");
+		const params: Record<string, string> = {
+			user_phone: `eq.${phone}`,
+			select: "*",
+			limit: "1",
+		};
 
-		const params = Object.fromEntries(new URLSearchParams(filter));
-		params.select = "*";
-		params.limit = "1";
+		if (isOrderNumber) {
+			params.order_number = `eq.${orderIdOrNumber}`;
+		} else {
+			params.id = `eq.${orderIdOrNumber}`;
+		}
 
-		const { data: orders, error: orderError } = await this.rest<OrderRecord[]>("orders", {
+		let { data: orders, error: orderError } = await this.rest<OrderRecord[]>("orders", {
 			method: "GET",
 			params,
 		});
+
+		// Fallback: If not found by primary key assumption, try the alternate field
+		if ((!orders || orders.length === 0) && !orderError) {
+			const alternateParams: Record<string, string> = {
+				user_phone: `eq.${phone}`,
+				select: "*",
+				limit: "1",
+			};
+			if (isOrderNumber) {
+				alternateParams.id = `eq.${orderIdOrNumber}`;
+			} else {
+				alternateParams.order_number = `eq.${orderIdOrNumber}`;
+			}
+
+			const altRes = await this.rest<OrderRecord[]>("orders", {
+				method: "GET",
+				params: alternateParams,
+			});
+			orders = altRes.data;
+			orderError = altRes.error;
+		}
 
 		if (orderError || !orders || orders.length === 0) {
 			return { order: null, error: orderError || "Order not found." };
@@ -662,6 +754,128 @@ export class SupabaseClient {
 			},
 			error: null,
 		};
+	}
+
+	/**
+	 * Cancels an order if it belongs to the user and is in a cancellable state (pending or paid)
+	 */
+	async cancelOrder(
+		phone: string,
+		orderIdOrNumber: string,
+		reason?: string
+	): Promise<{ order: OrderWithItemsRecord | null; error: string | null }> {
+		const { order: existing, error: fetchError } = await this.getOrderByIdOrNumber(phone, orderIdOrNumber);
+
+		if (fetchError || !existing) {
+			return { order: null, error: fetchError || "Order not found." };
+		}
+
+		if (existing.status === "cancelled") {
+			return { order: existing, error: "Order is already cancelled." };
+		}
+
+		if (existing.status === "shipped" || existing.status === "delivered") {
+			return {
+				order: null,
+				error: `Order cannot be cancelled because it has already been ${existing.status}.`,
+			};
+		}
+
+		const nowIso = new Date().toISOString();
+		const cancellationNote = reason ? `Cancellation reason: ${reason}` : "Cancelled by user";
+		const updatedNotes = existing.notes ? `${existing.notes} | ${cancellationNote}` : cancellationNote;
+
+		if (!this.isConfigured()) {
+			return {
+				order: {
+					...existing,
+					status: "cancelled",
+					notes: updatedNotes,
+					updated_at: nowIso,
+				},
+				error: null,
+			};
+		}
+
+		const { data: updatedOrders, error: updateError } = await this.rest<OrderRecord[]>("orders", {
+			method: "PATCH",
+			params: {
+				id: `eq.${existing.id}`,
+				user_phone: `eq.${phone}`,
+				select: "*",
+			},
+			body: {
+				status: "cancelled",
+				notes: updatedNotes,
+				updated_at: nowIso,
+			},
+		});
+
+		if (updateError || !updatedOrders || updatedOrders.length === 0) {
+			return { order: null, error: updateError || "Failed to update order status." };
+		}
+
+		return {
+			order: {
+				...updatedOrders[0],
+				items: existing.items,
+			},
+			error: null,
+		};
+	}
+
+	/**
+	 * Retrieves order count statistics breakdown by status for a customer
+	 */
+	async getOrderStats(
+		phone: string
+	): Promise<{
+		stats: {
+			total: number;
+			pending: number;
+			paid: number;
+			processing: number;
+			shipped: number;
+			delivered: number;
+			cancelled: number;
+		};
+		error: string | null;
+	}> {
+		const defaultStats = {
+			total: 0,
+			pending: 0,
+			paid: 0,
+			processing: 0,
+			shipped: 0,
+			delivered: 0,
+			cancelled: 0,
+		};
+
+		if (!this.isConfigured()) {
+			return { stats: defaultStats, error: null };
+		}
+
+		const { data, error } = await this.rest<Array<{ status: string }>>("orders", {
+			method: "GET",
+			params: {
+				user_phone: `eq.${phone}`,
+				select: "status",
+			},
+		});
+
+		if (error || !data) {
+			return { stats: defaultStats, error: error || "Failed to retrieve order stats." };
+		}
+
+		const stats = { ...defaultStats, total: data.length };
+		for (const row of data) {
+			const s = row.status?.toLowerCase();
+			if (s in stats && s !== "total") {
+				(stats as Record<string, number>)[s]++;
+			}
+		}
+
+		return { stats, error: null };
 	}
 }
 

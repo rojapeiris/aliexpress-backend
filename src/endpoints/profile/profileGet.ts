@@ -17,6 +17,7 @@ export class ProfileGet extends OpenAPIRoute {
 			headers: z.object({
 				authorization: z
 					.string()
+					.optional()
 					.describe("Bearer <session_token> obtained from OTP verification"),
 			}),
 		},

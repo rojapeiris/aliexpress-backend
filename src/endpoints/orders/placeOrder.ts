@@ -6,13 +6,13 @@ import { SupabaseClient } from "../../lib/supabase-client";
 const OrderItemSchema = z.object({
 	product_id: z.string().describe("AliExpress product ID"),
 	product_title: z.string().describe("Product name / title"),
-	product_image: z.string().url().optional().describe("Product thumbnail URL"),
-	product_detail_url: z.string().url().optional().describe("AliExpress product page URL"),
+	product_image: z.string().optional().describe("Product thumbnail URL"),
+	product_detail_url: z.string().optional().describe("AliExpress product page URL"),
 	sku_id: z.string().optional().describe("Selected SKU variant ID"),
 	sku_properties: z.string().optional().describe("Selected SKU variant description (e.g. 'Color:Red,Size:M')"),
 	unit_price: z.number().positive().describe("Unit price in the given currency"),
 	quantity: z.number().int().positive().default(1).describe("Quantity ordered"),
-	total_price: z.number().positive().describe("Line total (unit_price × quantity)"),
+	total_price: z.number().positive().optional().describe("Line total (unit_price × quantity)"),
 	currency: z.string().default("LKR").optional().describe("Currency code (default 'LKR')"),
 });
 
@@ -24,7 +24,7 @@ const ShippingAddressSchema = z.object({
 	city: z.string().describe("City / Town"),
 	state_province: z.string().optional().describe("State or Province"),
 	postal_code: z.string().optional().describe("Postal / ZIP code"),
-	country: z.string().default("LK").describe("ISO country code (default 'LK')"),
+	country: z.string().default("LK").optional().describe("ISO country code (default 'LK')"),
 });
 
 /**
@@ -42,6 +42,7 @@ export class PlaceOrder extends OpenAPIRoute {
 			headers: z.object({
 				authorization: z
 					.string()
+					.optional()
 					.describe("Bearer <session_token> obtained from OTP verification"),
 			}),
 			body: contentJson(
@@ -120,8 +121,6 @@ export class PlaceOrder extends OpenAPIRoute {
 	};
 
 	public async handle(c: AppContext) {
-		const data = await this.getValidatedData<typeof this.schema>();
-		const body = data.body;
 		const authHeader = c.req.header("Authorization");
 
 		const supabase = new SupabaseClient({
@@ -129,8 +128,8 @@ export class PlaceOrder extends OpenAPIRoute {
 			key: c.env.SUPABASE_SERVICE_ROLE_KEY || c.env.SUPABASE_KEY,
 		});
 
-		// Authenticate session
-		const { session, error: authError } = await supabase.authenticateBearer(authHeader);
+		// Authenticate session first
+		const { session, profile, error: authError } = await supabase.authenticateBearer(authHeader);
 		if (authError || !session) {
 			return c.json(
 				{
@@ -141,11 +140,33 @@ export class PlaceOrder extends OpenAPIRoute {
 			);
 		}
 
+		const data = await this.getValidatedData<typeof this.schema>();
+		const body = data.body;
+
+		// Ensure total_price is computed and shipping details default cleanly
+		const normalizedItems = body.items.map((item) => {
+			const qty = item.quantity || 1;
+			const total = item.total_price || Math.round(item.unit_price * qty * 100) / 100;
+			return {
+				...item,
+				quantity: qty,
+				total_price: total,
+				currency: item.currency || body.currency || "LKR",
+			};
+		});
+
+		const shippingAddress = {
+			...body.shipping_address,
+			full_name: body.shipping_address.full_name || profile?.full_name || undefined,
+			phone: body.shipping_address.phone || session.phone,
+			country: body.shipping_address.country || profile?.country || "LK",
+		};
+
 		// Create order in Supabase
 		const { order, error: orderError } = await supabase.createOrder({
 			userPhone: session.phone,
-			items: body.items,
-			shippingAddress: body.shipping_address,
+			items: normalizedItems,
+			shippingAddress,
 			paymentMethod: body.payment_method,
 			notes: body.notes,
 			currency: body.currency,

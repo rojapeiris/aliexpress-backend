@@ -17,13 +17,14 @@ export class ProfileUpdate extends OpenAPIRoute {
 			headers: z.object({
 				authorization: z
 					.string()
+					.optional()
 					.describe("Bearer <session_token> obtained from OTP verification"),
 			}),
 			body: contentJson(
 				z.object({
 					full_name: z.string().optional().describe("User's full name"),
-					email: z.string().email().optional().describe("Email address"),
-					avatar_url: z.string().url().optional().describe("Avatar/profile picture URL"),
+					email: z.string().email().nullable().optional().or(z.literal("")).describe("Email address"),
+					avatar_url: z.string().nullable().optional().or(z.literal("")).describe("Avatar/profile picture URL"),
 					address_line1: z.string().optional().describe("Primary street address"),
 					address_line2: z.string().optional().describe("Apartment, suite, unit, etc."),
 					city: z.string().optional().describe("City / Town"),
@@ -82,8 +83,6 @@ export class ProfileUpdate extends OpenAPIRoute {
 	};
 
 	public async handle(c: AppContext) {
-		const data = await this.getValidatedData<typeof this.schema>();
-		const body = data.body;
 		const authHeader = c.req.header("Authorization");
 
 		const supabase = new SupabaseClient({
@@ -91,7 +90,7 @@ export class ProfileUpdate extends OpenAPIRoute {
 			key: c.env.SUPABASE_SERVICE_ROLE_KEY || c.env.SUPABASE_KEY,
 		});
 
-		// Authenticate session
+		// Authenticate session first
 		const { session, error: authError } = await supabase.authenticateBearer(authHeader);
 		if (authError || !session) {
 			return c.json(
@@ -103,11 +102,14 @@ export class ProfileUpdate extends OpenAPIRoute {
 			);
 		}
 
+		const data = await this.getValidatedData<typeof this.schema>();
+		const body = data.body;
+
 		// Update profile in Supabase
 		const { profile, error: updateError } = await supabase.updateProfile(session.phone, {
 			full_name: body.full_name,
-			email: body.email,
-			avatar_url: body.avatar_url,
+			email: body.email === "" ? null : body.email,
+			avatar_url: body.avatar_url === "" ? null : body.avatar_url,
 			address_line1: body.address_line1,
 			address_line2: body.address_line2,
 			city: body.city,
