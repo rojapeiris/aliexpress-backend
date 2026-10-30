@@ -2,6 +2,7 @@ import { ApiException, fromHono } from "chanfana";
 import { Hono } from "hono";
 import { ContentfulStatusCode } from "hono/utils/http-status";
 import { aliexpressRouter } from "./endpoints/aliexpress/router";
+import { mobileAuthRouter } from "./endpoints/auth/router";
 import { AppEnv } from "./types";
 
 // Start a Hono app
@@ -40,7 +41,8 @@ const openapi = fromHono(app, {
 	},
 });
 
-// Register AliExpress Sub router
+// Register Sub routers
+openapi.route("/auth", mobileAuthRouter);
 openapi.route("/aliexpress", aliexpressRouter);
 
 // Export the Hono app

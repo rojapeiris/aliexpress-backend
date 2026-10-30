@@ -1,0 +1,22 @@
+# ==============================================================
+# Cloudflare Workers Local Development Environment Variables
+# Copy this file to '.dev.vars' for local testing (wrangler dev)
+# NOTE: .dev.vars is gitignored and safe for local secrets.
+# ==============================================================
+
+# AliExpress Open Platform Credentials
+ALIEXPRESS_APP_KEY=556446
+ALIEXPRESS_APP_SECRET=HusiSvXXSceP9mAcOl1317tqPlAPByG7
+
+# Supabase Credentials (from your Supabase Project Settings -> API)
+SUPABASE_URL=https://your-project-ref.supabase.co
+SUPABASE_KEY=your-supabase-anon-or-service-role-key
+
+# Ideamart AppZone Configuration
+IDEAMART_APP_CODE=op
+IDEAMART_APP_007258=APP_007258
+IDEAMART_APP_067413=APP_067413
+
+# Session Validity (in days, default: 30)
+SESSION_TTL_DAYS=30
+
