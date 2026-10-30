@@ -9,8 +9,8 @@ const mockEnv: AppEnv = {
 	IDEAMART_REQUEST_URL: "https://appzone.lk/api/otp/request",
 	IDEAMART_VERIFY_URL: "https://appzone.lk/api/otp/verify",
 	IDEAMART_APP_CODE: "op",
-	IDEAMART_APP_007258: "APP_007258",
-	IDEAMART_APP_067413: "APP_067413",
+	APP_ID_MOBITEL: "APP_007258",
+	APP_ID_OTHER: "APP_067413",
 };
 
 const MOCK_AUTH = "Bearer mock_valid_bearer_token_1234567890abcdef";

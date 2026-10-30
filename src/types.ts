@@ -12,8 +12,8 @@ export interface AppEnv extends Env {
 
 	// Ideamart AppZone OTP Service Configuration
 	IDEAMART_APP_CODE?: string;
-	IDEAMART_APP_007258?: string;
-	IDEAMART_APP_067413?: string;
+	APP_ID_MOBITEL?: string;
+	APP_ID_OTHER?: string;
 	IDEAMART_REQUEST_URL?: string;
 	IDEAMART_VERIFY_URL?: string;
 	SESSION_TTL_DAYS?: string;

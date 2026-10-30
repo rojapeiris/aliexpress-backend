@@ -14,8 +14,8 @@ SUPABASE_KEY=your-supabase-anon-or-service-role-key
 
 # Ideamart AppZone Configuration
 IDEAMART_APP_CODE=op
-IDEAMART_APP_007258=APP_007258
-IDEAMART_APP_067413=APP_067413
+APP_ID_MOBITEL=APP_007258
+APP_ID_OTHER=APP_067413
 
 # Session Validity (in days, default: 30)
 SESSION_TTL_DAYS=30

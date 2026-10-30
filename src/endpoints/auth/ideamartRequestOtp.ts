@@ -84,8 +84,8 @@ export class IdeamartRequestOtp extends OpenAPIRoute {
 			requestUrl: c.env.IDEAMART_REQUEST_URL,
 			verifyUrl: c.env.IDEAMART_VERIFY_URL,
 			appCode: c.env.IDEAMART_APP_CODE,
-			appIdMobitel: c.env.IDEAMART_APP_007258,
-			appIdOther: c.env.IDEAMART_APP_067413,
+			appIdMobitel: c.env.APP_ID_MOBITEL,
+			appIdOther: c.env.APP_ID_OTHER,
 		};
 
 		const result = await requestIdeamartOtp(
