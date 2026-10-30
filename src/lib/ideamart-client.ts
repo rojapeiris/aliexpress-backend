@@ -10,7 +10,7 @@
 export const IDEAMART_REQUEST_URL = "https://appzone.lk/api/otp/request";
 export const IDEAMART_VERIFY_URL = "https://appzone.lk/api/otp/verify";
 
-export const DEFAULT_APP_ID_MOBITEL = "APP_005144"; // Prefixes: 9471, 9470, 071, 070
+export const DEFAULT_APP_ID_MOBITEL = "APP_005586"; // Prefixes: 9471, 9470, 071, 070
 export const DEFAULT_APP_ID_OTHER = "APP_068124";   // All other prefixes (Dialog, Airtel, Hutch)
 export const DEFAULT_APP_CODE = "op";
 
