@@ -1,55 +1,19 @@
 import { OpenAPIRoute, contentJson } from "chanfana";
 import { z } from "zod";
 import { AppContext, DEFAULT_APP_KEY, DEFAULT_APP_SECRET } from "../../../types";
-import { callAliExpressApi, AliExpressClientConfig } from "../../../lib/aliexpress-client";
+import { AliExpressClientConfig } from "../../../lib/aliexpress-client";
 import { TokenRepository } from "../../../lib/token-repository";
-
-interface RawProductItem {
-	product_id: number | string;
-	product_title: string;
-	product_main_image_url?: string;
-	product_detail_url?: string;
-	sale_price?: string;
-	target_sale_price?: string;
-	original_price?: string;
-	target_original_price?: string;
-	target_sale_price_currency?: string;
-	app_sale_price_currency?: string;
-	discount?: string;
-	evaluate_rate?: string;
-	evaluation_rate?: string;
-	volume?: number | string;
-	lastest_volume?: number | string;
-	first_level_category_id?: number;
-	second_level_category_id?: number;
-}
-
-interface RawApiResponse {
-	resp_result?: {
-		resp_code?: number;
-		resp_msg?: string;
-		result?: {
-			current_page_no?: number;
-			total_page_count?: number;
-			total_record_count?: number;
-			products?: RawProductItem[];
-		};
-	};
-	result?: {
-		products?: {
-			traffic_product_d_t_o?: RawProductItem[];
-		};
-		total_page_no?: number;
-		current_page_no?: number;
-		total_record_count?: number;
-	};
-}
+import { fetchCategoryProducts } from "../../../lib/aliexpress-category-helper";
 
 /**
  * GET /aliexpress/categories/:parentId/subcategories/:subcategoryId/products
  * Get dropshipping products directly by parent Category ID and Subcategory ID.
  *
- * Method: aliexpress.ds.text.search / aliexpress.ds.recommend.feed.get
+ * Uses a multi-strategy approach:
+ *   1. aliexpress.ds.text.search with resolved category name as keywords + subcategoryId
+ *   2. Category-specific bestseller feed (from CATEGORY_MAP, keyed on parentId)
+ *   3. High-volume generic feeds: DS_NewArrivals, DS_Sports&Outdoors_bestsellers, etc.
+ *   4. Broad fallback keyword text search
  */
 export class AliExpressSubCategoryProducts extends OpenAPIRoute {
 	public schema = {
@@ -169,136 +133,32 @@ export class AliExpressSubCategoryProducts extends OpenAPIRoute {
 		const repo = new TokenRepository(c.env.DB);
 		const sessionToken = await repo.getValidAccessToken(query.user_id, config);
 
-		// Primary: Query via aliexpress.ds.text.search
-		const searchParams: Record<string, string | number> = {
-			category_id: subcategoryId,
-			page_no: pageNo,
-			page_size: pageSize,
-			countryCode: query.country || "US",
-			currency: query.target_currency || "USD",
-			local: (query.target_language || "EN").toLowerCase(),
-			keywords: query.q || "",
-		};
-
-		if (query.sort) {
-			searchParams.sort = query.sort;
-		}
-
-		const apiResponse = await callAliExpressApi<RawApiResponse>(
-			config,
-			"aliexpress.ds.text.search",
-			searchParams,
-			sessionToken
-		);
-
-		if (apiResponse.success && apiResponse.data) {
-			const respResult = apiResponse.data.resp_result?.result;
-			const rawItems = respResult?.products || [];
-
-			if (rawItems.length > 0 || respResult) {
-				const products = rawItems.map((p) => ({
-					product_id: String(p.product_id),
-					title: p.product_title,
-					main_image_url: p.product_main_image_url,
-					sale_price: p.target_sale_price || p.sale_price,
-					original_price: p.original_price || p.target_original_price,
-					currency:
-						p.target_sale_price_currency ||
-						p.app_sale_price_currency ||
-						query.target_currency ||
-						"USD",
-					discount: p.discount,
-					rating: p.evaluation_rate || p.evaluate_rate,
-					volume: p.volume !== undefined ? String(p.volume) : (p.lastest_volume !== undefined ? String(p.lastest_volume) : undefined),
-					detail_url: p.product_detail_url,
-					category_id: p.first_level_category_id ?? parseInt(parentId, 10),
-					subcategory_id: p.second_level_category_id ?? parseInt(subcategoryId, 10),
-				}));
-
-				return c.json({
-					success: true,
-					result: {
-						category_id: parentId,
-						subcategory_id: subcategoryId,
-						current_page: respResult?.current_page_no ?? pageNo,
-						page_size: pageSize,
-						total_pages: respResult?.total_page_count,
-						total_count: respResult?.total_record_count,
-						products,
-					},
-				});
-			}
-		}
-
-		// Fallback to aliexpress.ds.recommend.feed.get
-		const fallbackParams: Record<string, string | number> = {
-			feed_name: "DS_Home&Kitchen_bestsellers",
-			category_id: subcategoryId,
-			page_no: pageNo,
-			page_size: pageSize,
+		// Delegate to multi-strategy helper (parentId drives CATEGORY_MAP lookup, subcategoryId used as target)
+		const result = await fetchCategoryProducts({
+			categoryId: parentId,
+			subcategoryId,
+			q: query.q,
+			pageNo,
+			pageSize,
 			country: query.country || "US",
-			target_currency: query.target_currency || "USD",
-			target_language: query.target_language || "EN",
-		};
-
-		const fallbackResponse = await callAliExpressApi<RawApiResponse>(
+			currency: query.target_currency || "USD",
+			language: query.target_language || "EN",
+			sort: query.sort,
 			config,
-			"aliexpress.ds.recommend.feed.get",
-			fallbackParams,
-			sessionToken
-		);
+			sessionToken,
+		});
 
-		if (fallbackResponse.success && fallbackResponse.data) {
-			const feedData = fallbackResponse.data.result;
-			let rawProducts = feedData?.products?.traffic_product_d_t_o || [];
-
-			if (query.q) {
-				const lq = query.q.toLowerCase();
-				rawProducts = rawProducts.filter((p) =>
-					p.product_title?.toLowerCase().includes(lq)
-				);
-			}
-
-			const products = rawProducts.map((p) => ({
-				product_id: String(p.product_id),
-				title: p.product_title,
-				main_image_url: p.product_main_image_url,
-				sale_price: p.target_sale_price,
-				original_price: p.target_original_price,
-				currency: p.target_sale_price_currency || query.target_currency || "USD",
-				discount: p.discount,
-				rating: p.evaluate_rate,
-				volume: p.lastest_volume !== undefined ? String(p.lastest_volume) : undefined,
-				detail_url: p.product_detail_url,
-				category_id: parseInt(parentId, 10),
-				subcategory_id: parseInt(subcategoryId, 10),
-			}));
-
-			return c.json({
-				success: true,
-				result: {
-					category_id: parentId,
-					subcategory_id: subcategoryId,
-					current_page: feedData?.current_page_no ?? pageNo,
-					page_size: pageSize,
-					total_pages: feedData?.total_page_no,
-					total_count: feedData?.total_record_count,
-					products,
-				},
-			});
-		}
-
-		return c.json(
-			{
-				success: false,
-				error:
-					apiResponse.error ??
-					fallbackResponse.error ??
-					`Failed to fetch products for subcategory ID: ${subcategoryId}`,
-				errorCode: apiResponse.errorCode ?? fallbackResponse.errorCode,
+		return c.json({
+			success: true,
+			result: {
+				category_id: parentId,
+				subcategory_id: subcategoryId,
+				current_page: result.currentPage,
+				page_size: result.pageSize,
+				total_pages: result.totalPages,
+				total_count: result.totalCount,
+				products: result.products,
 			},
-			400
-		);
+		});
 	}
 }
-

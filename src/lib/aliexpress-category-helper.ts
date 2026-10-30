@@ -7,98 +7,182 @@ export interface CategoryMeta {
 }
 
 /**
- * Standard AliExpress Dropshipping Root Categories Metadata
+ * Standard AliExpress Dropshipping Root Categories Metadata.
+ * feedName values are verified against the live aliexpress.ds.recommend.feed.list response.
+ * See: aliexpress.ds.recommend.feed.list → result.feeds[].name
  */
 export const CATEGORY_MAP: Record<string, CategoryMeta> = {
-	"30": {
-		name: "Security & Protection",
-		feedName: "DS_Security&Protection_bestsellers",
-		fallbackKeywords: "Security",
-	},
+	// ── Electronics ───────────────────────────────────────────────────────────
 	"509": {
 		name: "Cellphones & Telecommunications",
-		feedName: "DS_Cellphones&Telecommunications_bestsellers",
+		feedName: "AEB_ PhoneAccessories_EG",                  // 7,980 products
 		fallbackKeywords: "Phone",
 	},
 	"1509": {
 		name: "Consumer Electronics",
-		feedName: "DS_ConsumerElectronics_bestsellers",
+		feedName: "DS_ConsumerElectronics_bestsellers",         // 16,560 products
 		fallbackKeywords: "Electronics",
 	},
-	"66": {
-		name: "Beauty & Health",
-		feedName: "DS_Beauty&Health_bestsellers",
-		fallbackKeywords: "Beauty",
+	"44": {
+		name: "Consumer Electronics (alt)",
+		feedName: "DS_ConsumerElectronics_bestsellers",         // 16,560 products
+		fallbackKeywords: "Electronics",
 	},
-	"15": {
-		name: "Home & Garden",
-		feedName: "DS_Home&Kitchen_bestsellers",
-		fallbackKeywords: "Home",
-	},
-	"18": {
-		name: "Sports & Entertainment",
-		feedName: "DS_Sports&Entertainment_bestsellers",
-		fallbackKeywords: "Sports",
-	},
-	"34": {
-		name: "Automobiles & Motorcycles",
-		feedName: "DS_Automobiles&Motorcycles_bestsellers",
-		fallbackKeywords: "Car",
-	},
-	"1501": {
-		name: "Mother & Kids",
-		feedName: "DS_Mother&Kids_bestsellers",
-		fallbackKeywords: "Baby",
-	},
-	"1503": {
-		name: "Toys & Hobbies",
-		feedName: "DS_Toys&Hobbies_bestsellers",
-		fallbackKeywords: "Toys",
-	},
-	"1420": {
-		name: "Tools & Home Improvement",
-		feedName: "DS_Tools&HomeImprovement_bestsellers",
-		fallbackKeywords: "Tools",
-	},
-	"1524": {
-		name: "Luggage & Bags",
-		feedName: "DS_Luggage&Bags_bestsellers",
-		fallbackKeywords: "Bag",
-	},
-	"322": {
-		name: "Shoes",
-		feedName: "DS_Shoes_bestsellers",
-		fallbackKeywords: "Shoes",
-	},
-	"200000345": {
-		name: "Jewelry & Accessories",
-		feedName: "DS_Jewelry&Accessories_bestsellers",
-		fallbackKeywords: "Jewelry",
-	},
-	"100003109": {
-		name: "Women's Clothing",
-		feedName: "DS_Women'sClothing_bestsellers",
-		fallbackKeywords: "Women",
-	},
-	"100003070": {
-		name: "Men's Clothing",
-		feedName: "DS_Men'sClothing_bestsellers",
-		fallbackKeywords: "Men",
-	},
-	"200000297": {
-		name: "Underwear & Sleepwear",
-		feedName: "DS_Women'sClothing_bestsellers",
-		fallbackKeywords: "Underwear",
+	"523": {
+		name: "Electronic Components",
+		feedName: "DS_ElectronicComponents_bestsellers",        // 2,340 products
+		fallbackKeywords: "Electronic Component",
 	},
 	"7": {
 		name: "Computer & Office",
-		feedName: "DS_ConsumerElectronics_bestsellers",
+		feedName: "AEB_ ComputerAccessories_EG",               // 7,861 products
 		fallbackKeywords: "Computer",
 	},
-	"44": {
-		name: "Consumer Electronics",
-		feedName: "DS_ConsumerElectronics_bestsellers",
-		fallbackKeywords: "Electronics",
+
+	// ── Home & Garden ─────────────────────────────────────────────────────────
+	"15": {
+		name: "Home & Garden",
+		feedName: "DS_Home&Kitchen_bestsellers",                // 8,610 products
+		fallbackKeywords: "Home",
+	},
+	"1420": {
+		name: "Tools & Home Improvement",
+		feedName: "AEB_Fetch_Garden&Tool&Pet&AutoParts_TopSellers_20241210", // 59,626 products
+		fallbackKeywords: "Tools",
+	},
+	"36": {
+		name: "Home Appliances",
+		feedName: "DS_Home&Kitchen_bestsellers",                // 8,610 products
+		fallbackKeywords: "Appliance",
+	},
+	"109": {
+		name: "Lights & Lighting",
+		feedName: "AEB_US_Lighting_TopSellers",                 // 16,890 products
+		fallbackKeywords: "Lighting",
+	},
+	"503": {
+		name: "Furniture",
+		feedName: "AEB_US_Furniture_TopSellers",                // 10,800 products
+		fallbackKeywords: "Furniture",
+	},
+	"2": {
+		name: "Garden Supplies",
+		feedName: "AEB_Fetch_Garden&Tool&Pet&AutoParts_TopSellers_20241210", // 59,626 products
+		fallbackKeywords: "Garden",
+	},
+
+	// ── Sports & Outdoor ──────────────────────────────────────────────────────
+	"18": {
+		name: "Sports & Entertainment",
+		feedName: "DS_Sports&Outdoors_bestsellers",             // 23,820 products
+		fallbackKeywords: "Sports",
+	},
+	"200001075": {
+		name: "Outdoor & Sporting Goods",
+		feedName: "DS_Sports&Outdoors_bestsellers",             // 23,820 products
+		fallbackKeywords: "Outdoor",
+	},
+
+	// ── Automobiles & Motorcycles ─────────────────────────────────────────────
+	"34": {
+		name: "Automobiles & Motorcycles",
+		feedName: "DS_Automobile&Accessories_bestsellers",      // 13,901 products
+		fallbackKeywords: "Car Accessories",
+	},
+	"400014020": {
+		name: "Auto Parts",
+		feedName: "AEB_Fetch_Garden&Tool&Pet&AutoParts_TopSellers_20241210", // 59,626 products
+		fallbackKeywords: "Auto Parts",
+	},
+
+	// ── Beauty & Health ───────────────────────────────────────────────────────
+	"66": {
+		name: "Beauty & Health",
+		feedName: "DS_Beauty_bestsellers",                      // 2,160 products
+		fallbackKeywords: "Beauty",
+	},
+	"200216085": {
+		name: "Hair Extensions & Wigs",
+		feedName: "AEB_SHOPLAZZA_HairExtensions&Wigs_$0~50_20241115", // 2,644 products
+		fallbackKeywords: "Hair Wig",
+	},
+
+	// ── Women's Clothing ──────────────────────────────────────────────────────
+	"100003109": {
+		name: "Women's Clothing",
+		feedName: "AEB_SHOPLAZZA_WomenClothing_$10~30_20241115", // 1,302 products
+		fallbackKeywords: "Women Clothing",
+	},
+	"200000297": {
+		name: "Underwear & Sleepwear",
+		feedName: "AEB_SHOPLAZZA_WomenClothing_$0~10_20241115", // 1,440 products
+		fallbackKeywords: "Underwear",
+	},
+
+	// ── Men's Clothing ────────────────────────────────────────────────────────
+	"100003070": {
+		name: "Men's Clothing",
+		feedName: "AEB_SHOPLAZZA_MenClothing_$10~30_20241115",  // 2,190 products
+		fallbackKeywords: "Men Clothing",
+	},
+
+	// ── Shoes ─────────────────────────────────────────────────────────────────
+	"322": {
+		name: "Shoes",
+		feedName: "AEB_SHOPLAZZA_Shoes_$10~30_20241115",        // 2,054 products
+		fallbackKeywords: "Shoes",
+	},
+
+	// ── Luggage & Bags ────────────────────────────────────────────────────────
+	"1524": {
+		name: "Luggage & Bags",
+		feedName: "AEB_SHOPLAZZA_Luggage&Bags_$10~30_20241115", // 1,481 products
+		fallbackKeywords: "Bag",
+	},
+
+	// ── Jewelry & Watches ─────────────────────────────────────────────────────
+	"200000345": {
+		name: "Jewelry & Accessories",
+		feedName: "DS_Jewelry&Watch 10$+",                      // 990 products
+		fallbackKeywords: "Jewelry",
+	},
+	"200003655": {
+		name: "Watches",
+		feedName: "DS_Jewelry&Watch 10$+",                      // 990 products
+		fallbackKeywords: "Watch",
+	},
+
+	// ── Mother & Kids ─────────────────────────────────────────────────────────
+	"1501": {
+		name: "Mother & Kids",
+		feedName: "AEB_SHOPLAZZA_Mother&Kids_$10~30_20241115",  // 3,390 products
+		fallbackKeywords: "Baby Kids",
+	},
+
+	// ── Toys & Hobbies ────────────────────────────────────────────────────────
+	"1503": {
+		name: "Toys & Hobbies",
+		feedName: "AEB_SHOPLAZZA_Toys&Hobbies_$10~20_20241118", // 2,182 products
+		fallbackKeywords: "Toys",
+	},
+	"143": {
+		name: "Dolls & Accessories",
+		feedName: "US_Dolls&Accessories",                       // 23,168 products
+		fallbackKeywords: "Dolls",
+	},
+
+	// ── Security & Protection ─────────────────────────────────────────────────
+	"30": {
+		name: "Security & Protection",
+		feedName: "Security_ZA topsellers_ 20240423",           // 9,210 products
+		fallbackKeywords: "Security Camera",
+	},
+
+	// ── Pets & Supplies ───────────────────────────────────────────────────────
+	"200000783": {
+		name: "Pets & Pet Supplies",
+		feedName: "AEB_Fetch_Garden&Tool&Pet&AutoParts_TopSellers_20241210", // 59,626 products
+		fallbackKeywords: "Pet",
 	},
 };
 
@@ -343,12 +427,22 @@ export async function fetchCategoryProducts(params: CategoryFetchParams): Promis
 		}
 	}
 
-	// 3. Strategy B: Category-specific recommendation feed (e.g. DS_Security&Protection_bestsellers for 30)
+	// 3. Strategy B: Category-specific recommendation feed, then high-volume generic feeds
 	const candidateFeeds: string[] = [];
 	if (rootMeta?.feedName) {
 		candidateFeeds.push(rootMeta.feedName);
 	}
-	candidateFeeds.push("DS bestseller", "DS_bestseller", "DS_NewArrivals");
+	// Generic fallbacks in descending product_count order (all verified from feed.list):
+	candidateFeeds.push(
+		"DS_NewArrivals",                                           // 8,310 products
+		"DS_Home&Kitchen_bestsellers",                              // 8,610 products
+		"DS_Sports&Outdoors_bestsellers",                           // 23,820 products
+		"DS_ConsumerElectronics_bestsellers",                       // 16,560 products
+		"DS_Automobile&Accessories_bestsellers",                    // 13,901 products
+		"AEB_Fetch_Garden&Tool&Pet&AutoParts_TopSellers_20241210",  // 59,626 products
+		"AEB_i69_FullCategory_TopSellers_20241225",                 // 158,284 products
+		"AEB_Droplo_BestsellersItems_20241016",                     // 200,110 products
+	);
 
 	for (const feed of candidateFeeds) {
 		const feedRes = await callAliExpressApi<RawTextSearchResponse>(
