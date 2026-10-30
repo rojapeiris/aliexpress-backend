@@ -89,19 +89,9 @@ export class AliExpressCategoryList extends OpenAPIRoute {
 			appSecret: c.env.ALIEXPRESS_APP_SECRET || DEFAULT_APP_SECRET,
 		};
 
-		let sessionToken: string | undefined;
+		// Retrieve or automatically refresh session token
 		const repo = new TokenRepository(c.env.DB);
-		if (data.query.user_id) {
-			const record = await repo.findByUserId(data.query.user_id);
-			if (record && !repo.isAccessTokenExpired(record)) {
-				sessionToken = record.access_token;
-			}
-		} else {
-			const latest = await repo.getLatestToken();
-			if (latest && !repo.isAccessTokenExpired(latest)) {
-				sessionToken = latest.access_token;
-			}
-		}
+		const sessionToken = await repo.getValidAccessToken(data.query.user_id, config);
 
 		// Call aliexpress.ds.category.get
 		const apiResponse = await callAliExpressApi<RawDsCategoryResponse>(

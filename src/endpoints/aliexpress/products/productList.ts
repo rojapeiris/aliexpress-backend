@@ -144,20 +144,9 @@ export class AliExpressProductList extends OpenAPIRoute {
 			appSecret: c.env.ALIEXPRESS_APP_SECRET || DEFAULT_APP_SECRET,
 		};
 
-		// Check session token
-		let sessionToken: string | undefined;
+		// Retrieve or automatically refresh session token
 		const repo = new TokenRepository(c.env.DB);
-		if (query.user_id) {
-			const record = await repo.findByUserId(query.user_id);
-			if (record && !repo.isAccessTokenExpired(record)) {
-				sessionToken = record.access_token;
-			}
-		} else {
-			const latest = await repo.getLatestToken();
-			if (latest && !repo.isAccessTokenExpired(latest)) {
-				sessionToken = latest.access_token;
-			}
-		}
+		const sessionToken = await repo.getValidAccessToken(query.user_id, config);
 
 		const params: Record<string, string | number> = {
 			feed_name: query.feed_name || "DS_Home&Kitchen_bestsellers",

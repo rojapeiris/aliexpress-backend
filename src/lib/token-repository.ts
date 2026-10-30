@@ -1,7 +1,4 @@
-/**
- * AliExpress Token Repository
- * Manages token persistence in Cloudflare D1.
- */
+import { callAuthApi, AliExpressClientConfig } from "./aliexpress-client";
 
 export interface TokenRecord {
 	id?: number;
@@ -15,6 +12,17 @@ export interface TokenRecord {
 	refresh_token_expires_at: number;
 	created_at?: string;
 	updated_at?: string;
+}
+
+interface RefreshTokenResponse {
+	access_token: string;
+	refresh_token: string;
+	expires_in: string | number;
+	refresh_token_valid_time: string | number;
+	user_id?: string;
+	seller_id?: string;
+	user_nick?: string;
+	account?: string;
 }
 
 export class TokenRepository {
@@ -92,5 +100,77 @@ export class TokenRepository {
 	 */
 	isRefreshTokenExpired(token: TokenRecord): boolean {
 		return Date.now() >= token.refresh_token_expires_at;
+	}
+
+	/**
+	 * Automatically retrieves a valid access token:
+	 * 1. Checks if stored access token is still active (with 60s buffer).
+	 * 2. If expired, automatically uses the refresh_token to call AliExpress OAuth refresh API.
+	 * 3. Persists the new token pair in D1.
+	 * 4. Returns the active access token seamlessly.
+	 */
+	async getValidAccessToken(
+		userId?: string,
+		config?: AliExpressClientConfig
+	): Promise<string | undefined> {
+		const record = userId ? await this.findByUserId(userId) : await this.getLatestToken();
+		if (!record) return undefined;
+
+		// 1. If still valid, return immediately
+		if (!this.isAccessTokenExpired(record)) {
+			return record.access_token;
+		}
+
+		// 2. If refresh_token is also expired, cannot auto-refresh (user must re-authorize)
+		if (this.isRefreshTokenExpired(record)) {
+			console.warn(`[Token] Both access and refresh tokens expired for user: ${record.user_id}`);
+			return undefined;
+		}
+
+		// 3. Auto-refresh with AliExpress
+		try {
+			console.log(`[Token] Access token expired. Auto-refreshing for user: ${record.user_id}...`);
+			const apiResult = await callAuthApi<RefreshTokenResponse>(
+				config,
+				"/auth/token/refresh",
+				{ refresh_token: record.refresh_token }
+			);
+
+			if (apiResult.success && apiResult.data) {
+				const data = apiResult.data;
+				const now = Date.now();
+				const expiresInSeconds = Number(data.expires_in) || 86400;
+				const accessTokenExpiresAt = now + expiresInSeconds * 1000;
+
+				let refreshTokenExpiresAt = Number(data.refresh_token_valid_time) || 0;
+				if (refreshTokenExpiresAt > 0 && refreshTokenExpiresAt < 10000000000) {
+					refreshTokenExpiresAt *= 1000;
+				}
+				if (refreshTokenExpiresAt === 0) {
+					refreshTokenExpiresAt = now + 30 * 24 * 3600 * 1000;
+				}
+
+				const newAccessToken = data.access_token;
+				const newRefreshToken = data.refresh_token || record.refresh_token;
+
+				await this.upsert({
+					user_id: record.user_id,
+					seller_id: record.seller_id ?? data.seller_id,
+					account: record.account ?? data.account,
+					user_nick: record.user_nick ?? data.user_nick,
+					access_token: newAccessToken,
+					refresh_token: newRefreshToken,
+					access_token_expires_at: accessTokenExpiresAt,
+					refresh_token_expires_at: refreshTokenExpiresAt,
+				});
+
+				console.log(`[Token] Auto-refresh completed successfully for user: ${record.user_id}`);
+				return newAccessToken;
+			}
+		} catch (err) {
+			console.error(`[Token] Auto-refresh failed:`, err);
+		}
+
+		return undefined;
 	}
 }
