@@ -20,6 +20,8 @@
 		"IDEAMART_VERIFY_URL": "https://appzone.lk/api/otp/verify",
 		"IDEAMART_APP_CODE": "op",
 		"APP_ID_MOBITEL": "APP_000391",
-		"APP_ID_OTHER": "APP_068124"
+		"APP_ID_OTHER": "APP_068124",
+		"SUPABASE_URL": "https://hzbdaixyhbhuqjscgxlo.supabase.co",
+		"SUPABASE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh6YmRhaXh5aGJodXFqc2NneGxvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMzMjExOTksImV4cCI6MjEwODg5NzE5OX0.b98E023ZuHE9jgmOROdU1rMLnxHLhljejPkKh5Ck5gQ"
 	}
 }
