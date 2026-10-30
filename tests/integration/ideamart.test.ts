@@ -118,14 +118,17 @@ describe("Ideamart OTP Endpoints", () => {
 	});
 
 	describe("POST /auth/ideamart/otp/verify", () => {
-		it("should verify OTP and return a session token", async () => {
+		it("should verify OTP, save subscriberId, and return a session token", async () => {
 			const originalFetch = globalThis.fetch;
 			globalThis.fetch = vi.fn().mockImplementation(async (url: string) => {
 				if (typeof url === "string" && url.includes("/otp/verify")) {
 					return new Response(
 						JSON.stringify({
+							subscriptionStatus: "INITIAL_CHARGING_PENDING",
+							subscriberId: "tel:NjFkNTdhZjU5M2EwYWNkN2E0ZDYwMzAzMDUyNmZiMTQ0ZWU1YzkyNWVhZmQ0NzJmZmQ2ODc3NDNmZGEyMWRkMjptb2JpdGVs",
+							statusDetail: "Success",
+							version: "1.0",
 							statusCode: "S1000",
-							message: "Success",
 						}),
 						{ status: 200, headers: { "Content-Type": "application/json" } }
 					);
@@ -150,6 +153,8 @@ describe("Ideamart OTP Endpoints", () => {
 				result: {
 					token: string;
 					phone: string;
+					subscriber_id?: string;
+					subscription_status?: string;
 					expires_at: string;
 					session_id: string;
 				};
@@ -160,6 +165,8 @@ describe("Ideamart OTP Endpoints", () => {
 			expect(body.result.token).toBeDefined();
 			expect(body.result.token.length).toBeGreaterThan(20);
 			expect(body.result.phone).toBe("0771234567");
+			expect(body.result.subscriber_id).toContain("tel:NjFkNT");
+			expect(body.result.subscription_status).toBe("INITIAL_CHARGING_PENDING");
 
 			globalThis.fetch = originalFetch;
 		});

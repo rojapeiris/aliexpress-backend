@@ -19,6 +19,7 @@ export interface AppSessionRecord {
 export interface ProfileRecord {
 	id: string;
 	phone: string;
+	subscriber_id?: string | null;
 	full_name?: string | null;
 	email?: string | null;
 	avatar_url?: string | null;
@@ -68,7 +69,12 @@ export class SupabaseClient {
 	}
 
 	public isConfigured(): boolean {
-		return Boolean(this.baseUrl && this.apiKey);
+		return Boolean(
+			this.baseUrl &&
+			this.apiKey &&
+			!this.baseUrl.includes("your-project-ref") &&
+			!this.apiKey.includes("your-supabase")
+		);
 	}
 
 	private getHeaders(): Record<string, string> {
@@ -147,10 +153,24 @@ export class SupabaseClient {
 	}
 
 	/**
-	 * Upserts a user profile by phone number
+	 * Upserts a user profile by phone number. If profile is not found, creates a new one using phone.
+	 * Also saves/updates the subscriber_id received from Ideamart OTP verification.
 	 */
-	async ensureProfile(phone: string, fullName?: string): Promise<ProfileRecord | null> {
-		// First check if profile exists
+	async ensureProfile(
+		phone: string,
+		fullName?: string,
+		subscriberId?: string
+	): Promise<ProfileRecord | null> {
+		if (!this.isConfigured()) {
+			return {
+				id: crypto.randomUUID(),
+				phone,
+				subscriber_id: subscriberId || null,
+				full_name: fullName || null,
+			};
+		}
+
+		// First check if profile already exists
 		const { data: existing } = await this.rest<ProfileRecord[]>("profiles", {
 			method: "GET",
 			params: {
@@ -161,21 +181,35 @@ export class SupabaseClient {
 		});
 
 		if (existing && existing.length > 0) {
-			return existing[0];
+			const current = existing[0];
+			// If subscriber_id is provided and was missing, update it
+			if (subscriberId && current.subscriber_id !== subscriberId) {
+				await this.rest("profiles", {
+					method: "PATCH",
+					params: { phone: `eq.${phone}` },
+					body: { subscriber_id: subscriberId },
+				});
+				current.subscriber_id = subscriberId;
+			}
+			return current;
 		}
 
-		// Insert new profile
+		// Profile not found: create a new profile using phone and subscriber_id
+		const newProfilePayload = {
+			id: crypto.randomUUID(),
+			phone,
+			subscriber_id: subscriberId || null,
+			full_name: fullName || null,
+		};
+
 		const { data: created, error } = await this.rest<ProfileRecord[]>("profiles", {
 			method: "POST",
-			body: {
-				phone,
-				full_name: fullName || null,
-			},
+			body: newProfilePayload,
 		});
 
 		if (error || !created || created.length === 0) {
-			console.warn("[Supabase] Failed to create profile:", error);
-			return null;
+			console.warn("[Supabase] Failed to persist new profile:", error);
+			return newProfilePayload;
 		}
 
 		return created[0];
@@ -184,14 +218,17 @@ export class SupabaseClient {
 	/**
 	 * Creates an app_session record
 	 * Fields: id, token_hash, phone, expires_at, created_at
+	 * Also ensures profile exists (or creates a new profile with phone and subscriber_id).
 	 */
 	async createAppSession(params: {
 		tokenHash: string;
 		phone: string;
 		expiresAt: Date;
-	}): Promise<{ session: AppSessionRecord | null; error: string | null }> {
-		// 1. Ensure profile exists so foreign key is satisfied
-		await this.ensureProfile(params.phone);
+		fullName?: string;
+		subscriberId?: string;
+	}): Promise<{ session: AppSessionRecord | null; profile: ProfileRecord | null; error: string | null }> {
+		// 1. If profile not found, create a new profile using phone & subscriber_id
+		const profile = await this.ensureProfile(params.phone, params.fullName, params.subscriberId);
 
 		const sessionId = crypto.randomUUID();
 		const now = new Date().toISOString();
@@ -211,11 +248,11 @@ export class SupabaseClient {
 		});
 
 		if (error) {
-			return { session: null, error };
+			return { session: null, profile, error };
 		}
 
 		const created = data && data.length > 0 ? data[0] : payload;
-		return { session: created, error: null };
+		return { session: created, profile, error: null };
 	}
 
 	/**

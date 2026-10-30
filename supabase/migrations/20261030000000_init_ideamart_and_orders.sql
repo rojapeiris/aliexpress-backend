@@ -22,6 +22,7 @@ $$ LANGUAGE plpgsql;
 CREATE TABLE IF NOT EXISTS public.profiles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     phone TEXT NOT NULL UNIQUE,
+    subscriber_id TEXT, -- Ideamart subscriber ID (e.g. tel:encrypted_hash from OTP verify)
     full_name TEXT,
     email TEXT,
     avatar_url TEXT,
@@ -35,8 +36,9 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Index for phone lookups
+-- Index for phone and subscriber_id lookups
 CREATE INDEX IF NOT EXISTS idx_profiles_phone ON public.profiles(phone);
+CREATE INDEX IF NOT EXISTS idx_profiles_subscriber_id ON public.profiles(subscriber_id);
 
 -- Trigger for profiles updated_at
 DROP TRIGGER IF EXISTS set_profiles_updated_at ON public.profiles;

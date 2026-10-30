@@ -50,6 +50,10 @@ export interface IdeamartOtpVerifyResult {
 	success: boolean;
 	statusCode: string;
 	message: string;
+	subscriberId?: string;
+	subscriptionStatus?: string;
+	statusDetail?: string;
+	version?: string;
 }
 
 /**
@@ -246,15 +250,23 @@ export async function verifyIdeamartOtp(
 		}
 
 		const statusCode = String(json["statusCode"] || "");
-		const rawMessage = json["message"] ? String(json["message"]) : "";
+		const rawMessage = json["message"] || json["statusDetail"] ? String(json["message"] || json["statusDetail"]) : "";
 		const friendlyMessage = VERIFY_STATUS_MESSAGES[statusCode] || rawMessage || "Unknown verification result from Ideamart";
 
 		const success = statusCode === "S1000";
+		const subscriberId = json["subscriberId"] ? String(json["subscriberId"]) : undefined;
+		const subscriptionStatus = json["subscriptionStatus"] ? String(json["subscriptionStatus"]) : undefined;
+		const statusDetail = json["statusDetail"] ? String(json["statusDetail"]) : undefined;
+		const version = json["version"] ? String(json["version"]) : undefined;
 
 		return {
 			success,
 			statusCode,
 			message: friendlyMessage,
+			subscriberId,
+			subscriptionStatus,
+			statusDetail,
+			version,
 		};
 	} catch (err) {
 		return {

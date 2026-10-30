@@ -60,12 +60,15 @@ export class IdeamartVerifyOtp extends OpenAPIRoute {
 						result: z.object({
 							token: z.string().describe("Bearer session token to use in Authorization header"),
 							phone: z.string(),
+							subscriber_id: z.string().optional().describe("Ideamart subscriber identifier (e.g. tel:encrypted_hash)"),
+							subscription_status: z.string().optional().describe("Subscription status (e.g. INITIAL_CHARGING_PENDING)"),
 							expires_at: z.string(),
 							session_id: z.string(),
 							profile: z
 								.object({
 									id: z.string().optional(),
 									phone: z.string(),
+									subscriber_id: z.string().nullable().optional(),
 									full_name: z.string().nullable().optional(),
 								})
 								.optional(),
@@ -147,28 +150,37 @@ export class IdeamartVerifyOtp extends OpenAPIRoute {
 		});
 
 		// 4. Create record in app_sessions table
-		// Fields: id, token_hash, phone, expires_at, created_at
-		const { session, error: sessionError } = await supabase.createAppSession({
+		// If profile not found in Supabase, automatically creates a new profile using phone & subscriber_id
+		const { session, profile, error: sessionError } = await supabase.createAppSession({
 			tokenHash,
 			phone,
 			expiresAt,
+			fullName: body.full_name,
+			subscriberId: verifyResult.subscriberId,
 		});
 
 		if (sessionError) {
 			console.error("[Supabase] Failed to create app session:", sessionError);
 
-			// If Supabase is not yet connected by user, return token with warning
+			// If Supabase credentials are not configured yet, return session in fallback mode
 			if (!supabase.isConfigured()) {
 				return c.json({
 					success: true,
 					statusCode: "S1000",
 					message:
-						"OTP verified successfully. (Note: Supabase credentials SUPABASE_URL / SUPABASE_KEY are not configured yet, session created in fallback mode)",
+						"OTP verified successfully. (Note: Supabase credentials are not configured yet; session created in fallback mode)",
 					result: {
 						token: rawToken,
 						phone,
+						subscriber_id: verifyResult.subscriberId,
+						subscription_status: verifyResult.subscriptionStatus,
 						expires_at: expiresAt.toISOString(),
 						session_id: crypto.randomUUID(),
+						profile: {
+							phone,
+							subscriber_id: verifyResult.subscriberId,
+							full_name: body.full_name || null,
+						},
 					},
 				});
 			}
@@ -184,8 +196,13 @@ export class IdeamartVerifyOtp extends OpenAPIRoute {
 			);
 		}
 
-		// 5. Fetch profile details
-		const profile = await supabase.getProfileByPhone(phone);
+		// Resolved profile (either retrieved or newly created using phone and subscriber_id)
+		const activeProfile = profile || (await supabase.getProfileByPhone(phone)) || {
+			id: crypto.randomUUID(),
+			phone,
+			subscriber_id: verifyResult.subscriberId || null,
+			full_name: body.full_name || null,
+		};
 
 		return c.json({
 			success: true,
@@ -194,15 +211,16 @@ export class IdeamartVerifyOtp extends OpenAPIRoute {
 			result: {
 				token: rawToken,
 				phone,
+				subscriber_id: activeProfile.subscriber_id || verifyResult.subscriberId,
+				subscription_status: verifyResult.subscriptionStatus,
 				expires_at: session?.expires_at || expiresAt.toISOString(),
 				session_id: session?.id || "",
-				profile: profile
-					? {
-							id: profile.id,
-							phone: profile.phone,
-							full_name: profile.full_name,
-					  }
-					: undefined,
+				profile: {
+					id: activeProfile.id,
+					phone: activeProfile.phone,
+					subscriber_id: activeProfile.subscriber_id || verifyResult.subscriberId || null,
+					full_name: activeProfile.full_name || null,
+				},
 			},
 		});
 	}
