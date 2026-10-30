@@ -323,8 +323,8 @@ function mapRawProducts(
 			p.volume !== undefined
 				? String(p.volume)
 				: p.lastest_volume !== undefined
-				? String(p.lastest_volume)
-				: undefined,
+					? String(p.lastest_volume)
+					: undefined,
 		detail_url: p.product_detail_url,
 		category_id:
 			p.first_level_category_id ?? (categoryId ? parseInt(categoryId, 10) : undefined),
