@@ -11,10 +11,12 @@ import { AliExpressTokenDelete } from "./auth/tokenDelete";
 import { AliExpressCategoryList } from "./categories/categoryList";
 import { AliExpressSubCategoryList } from "./categories/subCategoryList";
 import { AliExpressCategoryProducts } from "./categories/categoryProducts";
+import { AliExpressSubCategoryProducts } from "./categories/subCategoryProducts";
 import { AliExpressProductList } from "./products/productList";
 import { AliExpressProductSearch } from "./products/productSearch";
 import { AliExpressProductDetail } from "./products/productDetail";
 import { AliExpressFeedNameList } from "./products/feedNameList";
+import { AliExpressProductByCategory } from "./products/productByCategory";
 
 const subApp = new Hono();
 
@@ -24,12 +26,17 @@ const ONE_DAY_SECONDS = 86400; // 24 hours
 // Categories
 subApp.use("/categories", cfCache(ONE_DAY_SECONDS));
 subApp.use("/categories/:parentId/subcategories", cfCache(ONE_DAY_SECONDS));
+subApp.use("/categories/:parentId/subcategories/:subcategoryId/products", cfCache(ONE_DAY_SECONDS));
 
 // Feed Names
 subApp.use("/feeds", cfCache(ONE_DAY_SECONDS));
 
 // Category Products
 subApp.use("/categories/:categoryId/products", cfCache(ONE_DAY_SECONDS));
+
+// Products by Category & Subcategory
+subApp.use("/products/by-category", cfCache(ONE_DAY_SECONDS));
+subApp.use("/products/category", cfCache(ONE_DAY_SECONDS));
 
 // Products Feed List
 subApp.use("/products", cfCache(ONE_DAY_SECONDS));
@@ -54,11 +61,14 @@ aliexpressRouter.delete("/auth/token/:userId", AliExpressTokenDelete);
 // Categories Endpoints
 aliexpressRouter.get("/categories", AliExpressCategoryList);
 aliexpressRouter.get("/categories/:parentId/subcategories", AliExpressSubCategoryList);
+aliexpressRouter.get("/categories/:parentId/subcategories/:subcategoryId/products", AliExpressSubCategoryProducts);
 aliexpressRouter.get("/categories/:categoryId/products", AliExpressCategoryProducts);
 
 // Products Endpoints
 aliexpressRouter.get("/feeds", AliExpressFeedNameList);
-// Note: /products/search must precede /products/:productId to prevent route shadowing
+// Note: Specific paths (/products/search, /products/by-category, etc.) must precede /products/:productId to prevent route shadowing
 aliexpressRouter.get("/products/search", AliExpressProductSearch);
+aliexpressRouter.get("/products/by-category", AliExpressProductByCategory);
+aliexpressRouter.get("/products/category", AliExpressProductByCategory);
 aliexpressRouter.get("/products", AliExpressProductList);
 aliexpressRouter.get("/products/:productId", AliExpressProductDetail);

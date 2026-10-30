@@ -49,6 +49,10 @@ export class AliExpressCategoryProducts extends OpenAPIRoute {
 					.describe("Category or subcategory ID (e.g. 509 for Phones, or child category ID)"),
 			}),
 			query: z.object({
+				subcategory_id: z
+					.string()
+					.optional()
+					.describe("Optional subcategory ID to filter products under this category"),
 				q: z
 					.string()
 					.optional()
@@ -56,8 +60,7 @@ export class AliExpressCategoryProducts extends OpenAPIRoute {
 				feed_name: z
 					.string()
 					.optional()
-					.default("DS_Home&Kitchen_bestsellers")
-					.describe("Feed type. Use GET /aliexpress/feeds for valid names (e.g. 'DS_Home&Kitchen_bestsellers', 'DS_NewArrivals')"),
+					.describe("Optional feed name (e.g. 'DS_Home&Kitchen_bestsellers', 'DS_NewArrivals'). If omitted, direct category search is used."),
 				page_no: z
 					.string()
 					.optional()
@@ -101,6 +104,7 @@ export class AliExpressCategoryProducts extends OpenAPIRoute {
 						success: z.boolean(),
 						result: z.object({
 							category_id: z.string(),
+							subcategory_id: z.string().optional(),
 							current_page: z.number(),
 							page_size: z.number(),
 							total_pages: z.number().optional(),
@@ -117,6 +121,8 @@ export class AliExpressCategoryProducts extends OpenAPIRoute {
 									rating: z.string().optional(),
 									volume: z.string().optional(),
 									detail_url: z.string().optional(),
+									category_id: z.number().optional(),
+									subcategory_id: z.number().optional(),
 								})
 							),
 						}),
@@ -142,6 +148,7 @@ export class AliExpressCategoryProducts extends OpenAPIRoute {
 		const query = data.query;
 		const pageNo = parseInt(query.page_no || "1", 10);
 		const pageSize = Math.min(parseInt(query.page_size || "20", 10), 50);
+		const targetCategoryId = query.subcategory_id || categoryId;
 
 		const config: AliExpressClientConfig = {
 			appKey: c.env.ALIEXPRESS_APP_KEY || DEFAULT_APP_KEY,
@@ -152,9 +159,72 @@ export class AliExpressCategoryProducts extends OpenAPIRoute {
 		const repo = new TokenRepository(c.env.DB);
 		const sessionToken = await repo.getValidAccessToken(query.user_id, config);
 
+		// If feed_name is not provided, try direct search via aliexpress.ds.text.search
+		if (!query.feed_name) {
+			const searchParams: Record<string, string | number> = {
+				category_id: targetCategoryId,
+				page_no: pageNo,
+				page_size: pageSize,
+				countryCode: query.country || "US",
+				currency: query.target_currency || "USD",
+				local: (query.target_language || "EN").toLowerCase(),
+				keywords: query.q || "",
+			};
+			if (query.sort) {
+				searchParams.sort = query.sort;
+			}
+
+			const textSearchRes = await callAliExpressApi<any>(
+				config,
+				"aliexpress.ds.text.search",
+				searchParams,
+				sessionToken
+			);
+
+			if (textSearchRes.success && textSearchRes.data) {
+				const respResult = textSearchRes.data.resp_result?.result;
+				const rawItems = respResult?.products || [];
+
+				if (rawItems.length > 0 || respResult) {
+					const products = rawItems.map((p: any) => ({
+						product_id: String(p.product_id),
+						title: p.product_title,
+						main_image_url: p.product_main_image_url,
+						sale_price: p.target_sale_price || p.sale_price,
+						original_price: p.original_price || p.target_original_price,
+						currency:
+							p.target_sale_price_currency ||
+							p.app_sale_price_currency ||
+							query.target_currency ||
+							"USD",
+						discount: p.discount,
+						rating: p.evaluation_rate || p.evaluate_rate,
+						volume: p.volume !== undefined ? String(p.volume) : (p.lastest_volume !== undefined ? String(p.lastest_volume) : undefined),
+						detail_url: p.product_detail_url,
+						category_id: p.first_level_category_id ?? parseInt(categoryId, 10),
+						subcategory_id: p.second_level_category_id ?? (query.subcategory_id ? parseInt(query.subcategory_id, 10) : undefined),
+					}));
+
+					return c.json({
+						success: true,
+						result: {
+							category_id: categoryId,
+							subcategory_id: query.subcategory_id,
+							current_page: respResult?.current_page_no ?? pageNo,
+							page_size: pageSize,
+							total_pages: respResult?.total_page_count,
+							total_count: respResult?.total_record_count,
+							products,
+						},
+					});
+				}
+			}
+		}
+
+		// Fallback or explicit feed name: aliexpress.ds.recommend.feed.get
 		const params: Record<string, string | number> = {
 			feed_name: query.feed_name || "DS_Home&Kitchen_bestsellers",
-			category_id: categoryId,
+			category_id: targetCategoryId,
 			page_no: pageNo,
 			page_size: pageSize,
 			country: query.country || "US",
@@ -208,12 +278,15 @@ export class AliExpressCategoryProducts extends OpenAPIRoute {
 			rating: p.evaluate_rate,
 			volume: p.lastest_volume !== undefined ? String(p.lastest_volume) : undefined,
 			detail_url: p.product_detail_url,
+			category_id: parseInt(categoryId, 10),
+			subcategory_id: query.subcategory_id ? parseInt(query.subcategory_id, 10) : undefined,
 		}));
 
 		return c.json({
 			success: true,
 			result: {
 				category_id: categoryId,
+				subcategory_id: query.subcategory_id,
 				current_page: feedData?.current_page_no ?? pageNo,
 				page_size: pageSize,
 				total_pages: feedData?.total_page_no,

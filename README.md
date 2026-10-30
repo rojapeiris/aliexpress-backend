@@ -38,7 +38,8 @@ Interacts with `aliexpress.category.redefining.getchildrenpostcategorybyid`.
 |---|---|---|
 | `GET` | `/aliexpress/categories` | Gets root categories (pass `parent_id=0` or omit) or child categories (pass `parent_id=<id>`). |
 | `GET` | `/aliexpress/categories/:parentId/subcategories` | Gets direct subcategories for any given parent category ID (e.g. `509` for Phones & Telecommunications). |
-| `GET` | `/aliexpress/categories/:categoryId/products` | Gets dropshipping product list filtered by a specific category or subcategory ID. |
+| `GET` | `/aliexpress/categories/:parentId/subcategories/:subcategoryId/products` | Gets dropshipping products directly for a specific parent category and subcategory. |
+| `GET` | `/aliexpress/categories/:categoryId/products` | Gets dropshipping product list filtered by category ID (and optional `?subcategory_id=`). |
 
 ---
 
@@ -47,6 +48,7 @@ Interacts with `aliexpress.ds.text.search`, `aliexpress.ds.recommend.feed.get`, 
 
 | Method | Endpoint | Description |
 |---|---|---|
+| `GET` | `/aliexpress/products/by-category` | **Get Products by Category & Subcategory** (query: `category_id`, `subcategory_id`, `q`, `sort`, `country`, `target_currency`). Does not require feed names. |
 | `GET` | `/aliexpress/products/search` | **Search by Product Name / Keyword** (e.g. `?q=wireless+earbuds&category_id=509`). |
 | `GET` | `/aliexpress/products` | Retrieves curated dropshipping product feeds (bestsellers, trending) with prices, discounts, and ratings. |
 | `GET` | `/aliexpress/products/:productId` | Retrieves full product details including variants, SKUs, inventory, and images by product ID. |
